@@ -17,4 +17,18 @@ export function runDomainRegistryTests(): void {
   assert.equal(registry.getProvider('3isk')?.mainUrl, 'https://3iskk.xyz');
   assert.notEqual(registry.getProvider('yacinetv')?.mainUrl, 'https://yacinee-tv.net');
   assert.notEqual(registry.getProvider('syrialive')?.mainUrl, 'https://www.mewsry.live');
+  // HTTP reachability alone must never promote an unverified domain.
+  domainRegistry.mark('faselhd', 'https://fasellhd.rest/main', 'healthy', '2026-09-19T00:00:00.000Z', { identityVerified:false, latencyMs:20 });
+  assert.equal(domainRegistry.get('faselhd')?.lastKnownGood, 'https://www.fasel-hd.com');
+
+  // Identity-verified success is eligible to become last-known-good.
+  domainRegistry.mark('faselhd', 'https://fasellhd.rest/main', 'healthy', '2026-09-19T00:01:00.000Z', { identityVerified:true, latencyMs:20 });
+  assert.equal(domainRegistry.get('faselhd')?.lastKnownGood, 'https://fasellhd.rest/main');
+
+  // Repeated failures trigger cooldown and push a broken domain behind a healthy candidate.
+  domainRegistry.mark('faselhd', 'https://fasellhd.rest/main', 'dead', '2026-09-19T00:02:00.000Z', { identityVerified:false });
+  domainRegistry.mark('faselhd', 'https://fasellhd.rest/main', 'dead', '2026-09-19T00:02:01.000Z', { identityVerified:false });
+  domainRegistry.mark('faselhd', 'https://fasellhd.rest/main', 'dead', '2026-09-19T00:02:02.000Z', { identityVerified:false });
+  assert.ok(domainRegistry.observation('faselhd', 'https://fasellhd.rest/main')?.cooldownUntil);
+  assert.notEqual(domainRegistry.orderedUrls('faselhd', Date.parse('2026-09-19T00:02:03.000Z'))[0], 'https://fasellhd.rest/main');
 }
