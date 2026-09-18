@@ -2,26 +2,27 @@
 
 ## Current cycle
 - Baseline main before feature branch: `781e6875bfcfd783cc807d02cdb9e3d46c798243`
-- Active branch: `qahtan/domain-registry-foundation`
+- Active branch / PR: `qahtan/domain-registry-foundation` / #1
 - Source baseline: 3rb exact SHA `d27b00f1894a63f86786ff04939d3c76b58f6677`
 - Reuse permission: project owner explicitly allowed use, copying, modification and republication within Qahtan TV. Third-party notices remain independently applicable.
 
 ## Latest verified GitHub state
 - main SHA: `781e6875bfcfd783cc807d02cdb9e3d46c798243`
-- PR #1 active head before final state update: `6afa880f4d27e71d46c82c8acbfbc82143188b49`
-- Initial CI failed before tests because setup-node npm caching expected package-lock.json while this source only carries bun.lock.
-- CI workflow corrected: Node 24, current checkout/setup-node actions, no invalid npm cache assumption.
-- Backend P0 hardening started: validated public HTTP(S) destinations, blocks private/reserved IPs before each redirect, manual redirect validation, production debug-fetch disabled, bounded request bodies/timeouts, environment PORT, production CORS allowlist, streaming proxy with backpressure and Range/206 header propagation, no full media buffering.
+- CI run #10 succeeded on exact PR head `9ca8911637fbbac5a60ce84a2fa950e462546027` before the SyriaLive isolation commit.
+- Current code head before this state update: `9b8080ea92c99d98e1aface6ef459606f5fbfdcd`; its CI must pass before merge.
+- No release exists yet.
 
 ## Completed
-- Imported the source tree into Qahtan-TV.
-- Began Qahtan TV identity migration in package metadata, HTML and Stremio manifest.
-- Added centralized provider domain registry with 2026-09-19 manually verified baseline domains supplied by the user.
-- Added registry contract tests and CI gate for lint, tests and build.
+- Imported the authorized source tree and began Qahtan TV identity migration.
+- Added centralized 10-provider DomainRegistry from the user-verified 2026-09-19 baseline.
+- Website-backed providers consume the registry baseline; Yacine website identity remains separate from its API endpoint.
+- Added identity-gated last-known-good promotion, per-domain latency/failure/last-success observations, adaptive ordering and bounded circuit-breaker cooldown.
+- Hardened the backend baseline: public HTTP(S) destination validation, private/reserved destination blocking, redirect validation, production debug-fetch disabled, bounded request bodies/timeouts, environment PORT, production CORS allowlist, streaming proxy/backpressure and Range header propagation.
+- Removed the inherited false SyriaLive/Yacine duplication. SyriaLive no longer calls `def.ycnapi.com`, imports `decryptYacine`, or emits Yacine-derived events/streams. It now fails closed until an independent SyriaLive contract is verified.
 
 ## Provider/domain baseline
 Akwam: akwam.ss/one
-Yacine TV: yacinee-tv.net (API must remain separately verified)
+Yacine TV website: yacinee-tv.net (API separately verified before changes)
 Syria Live: mewsry.live
 WeCima: wecima.cx
 FaselHD: fasel-hd.com -> fasellhd.rest/main
@@ -31,21 +32,18 @@ WitAnime: witanime.you -> ristoanime.me
 3isk: 3iskk.xyz -> e.3cktv.com
 EgyDead: tv10.egydead.live/h3/
 
-## Not yet proven
-- Website-backed providers are wired to DomainRegistry; Yacine TV and SyriaLive intentionally retain separate API/parser endpoints until independently verified.
-- No end-to-end provider is marked Working from this cycle.
-- SyriaLive still requires parser separation from the Yacine implementation.
-- Backend SSRF/proxy hardening is partially implemented; dedicated security tests and stronger DNS rebinding connection pinning/allow policy remain before P0 closure.
-- Domain observations now track identity verification, latency, failures and cooldown with adaptive ordering. Active network health probes/identity fingerprints are still pending.
+## Provider evidence
+- SyriaLive: Broken/degraded by design pending independent parser verification. The previous implementation was invalid because it was Yacine under a second name; that coupling is removed rather than reported as success.
+- Other providers: no provider is yet claimed Working end-to-end in this development state. Parser existence or HTTP reachability is not sufficient evidence.
+
+## Remaining release blockers
+- Current-head CI after SyriaLive isolation.
+- Independent SyriaLive website contract/parser verification.
+- Active domain identity probes/identity fingerprints.
+- Dedicated SSRF/DNS-rebinding/proxy security tests; stronger rebinding-resistant connection policy remains P0.
+- Cookie jar domain/path/expiry isolation, bounded retries/backoff/concurrency/rate/response-size controls.
+- Provider health integration and real end-to-end evidence through stream resolution for each usable provider.
+- Complete identity/license/TODO/dead-code audit and release gate review.
 
 ## Next
-Implement safe active domain identity probes and isolate SyriaLive from the Yacine API implementation. Then add dedicated SSRF/DNS-rebinding/proxy security tests and provider end-to-end evidence.
-
-
-## 2026-09-19 cycle evidence
-- CI run #7 passed on exact prior PR head `c3876b06910bc26f75970aad39f781c6eb406bcf` (lint/tests/build).
-- Added identity-gated last-known-good promotion: HTTP success without provider identity proof cannot replace the active domain.
-- Added per-domain observations: last check/success, latency, consecutive failures, cooldown, reason and identity status.
-- Added bounded exponential cooldown after repeated failures and adaptive URL ordering.
-- Added contract tests for identity gating and circuit-breaker cooldown.
-- No provider is claimed Working end-to-end yet; external functional verification remains a release gate.
+Require green CI on the exact current PR head, then continue P0 backend security and active domain health verification. Keep SyriaLive visibly degraded until its own independently verified contract exists; never restore the Yacine alias as a shortcut.
