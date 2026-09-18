@@ -4,8 +4,11 @@ import { registry } from '../providers/index.js';
 
 export function runDomainRegistryTests(): void {
   const providers = domainRegistry.all();
-  assert.equal(providers.length, 10);
+  assert.equal(providers.length, 11);
   assert.equal(domainRegistry.get('akwam')?.primary, 'https://akwam.ss/one');
+  assert.equal(domainRegistry.get('tuktuk_candidate')?.primary, 'https://zx33.tuktuk-sa.online');
+  assert.equal(domainRegistry.get('tuktuk_candidate')?.lastKnownGood, null);
+  assert.equal(domainRegistry.get('tuktuk_candidate')?.health, 'unknown');
   assert.deepEqual(domainRegistry.get('faselhd')?.fallbacks, ['https://fasellhd.rest/main']);
   assert.deepEqual(domainRegistry.get('witanime')?.fallbacks, ['https://ristoanime.me']);
   assert.deepEqual(domainRegistry.get('3isk')?.fallbacks, ['https://e.3cktv.com']);
