@@ -47,3 +47,10 @@ EgyDead: tv10.egydead.live/h3/
 
 ## Next
 Require green CI on the exact current PR head, then continue P0 backend security and active domain health verification. Keep SyriaLive visibly degraded until its own independently verified contract exists; never restore the Yacine alias as a shortcut.
+
+## 2026-09-19 tuktuk candidate cycle
+- Exact failing PR head inspected: `27d7bda6f852976ce9d3178ccbfbae02df1355bb`; CI run #12 failed only in domain-registry contract tests after the intentional SyriaLive separation. Lint passed.
+- Fixed stale SyriaLive assertion: SyriaLive is expected to use `https://www.mewsry.live` and must differ from Yacine's API endpoint.
+- Added `https://zx33.tuktuk-sa.online` as quarantined `tuktuk_candidate` with `lastKnownGood=null`, `health=unknown`, and no identity hints. It is not registered as a content Provider and cannot be selected as Working.
+- Public lookup/fetch from the available environment did not establish the candidate's identity or functional contract, so promotion is deliberately blocked.
+- Added tests enforcing the candidate remains fail-closed until identity verification.
