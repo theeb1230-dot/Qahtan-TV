@@ -54,3 +54,8 @@ Require green CI on the exact current PR head, then continue P0 backend security
 - Added `https://zx33.tuktuk-sa.online` as quarantined `tuktuk_candidate` with `lastKnownGood=null`, `health=unknown`, and no identity hints. It is not registered as a content Provider and cannot be selected as Working.
 - Public lookup/fetch from the available environment did not establish the candidate's identity or functional contract, so promotion is deliberately blocked.
 - Added tests enforcing the candidate remains fail-closed until identity verification.
+
+## 2026-09-19 PR #1 gate
+- CI run #16 succeeded on exact PR head `70727d3fc100b357959d82c060509855701bf0d9` with lint, tests and production build green.
+- PR #1 is mergeable and contains the completed foundation/security/domain-registry slice.
+- This does not satisfy v1.0: active provider identity probes, end-to-end provider evidence, stronger proxy/DNS tests, cookie isolation and operational limits remain release blockers.
