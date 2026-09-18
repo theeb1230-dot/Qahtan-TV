@@ -1,5 +1,16 @@
 export type DomainHealth = 'unknown' | 'healthy' | 'degraded' | 'dead';
 
+export interface DomainObservation {
+  health: DomainHealth;
+  lastCheckedAt: string | null;
+  lastSuccessAt: string | null;
+  latencyMs: number | null;
+  consecutiveFailures: number;
+  cooldownUntil: string | null;
+  identityVerified: boolean;
+  reason: string | null;
+}
+
 export interface ProviderDomainConfig {
   providerId: string;
   primary: string;
@@ -24,17 +35,43 @@ const configs: Record<string, ProviderDomainConfig> = {
   egydead: { providerId:'egydead', primary:'https://tv10.egydead.live/h3/', fallbacks:[], candidates:[], lastKnownGood:'https://tv10.egydead.live/h3/', health:'unknown', lastCheckedAt:null, identityHints:['egydead','ايجي'] },
 };
 
+const observations = new Map<string, DomainObservation>();
+const keyFor = (providerId:string, url:string) => `${providerId}|${url}`;
+
 export class DomainRegistry {
   get(providerId: string): ProviderDomainConfig | undefined { return configs[providerId]; }
   all(): ProviderDomainConfig[] { return Object.values(configs).map(v => ({...v, fallbacks:[...v.fallbacks], candidates:[...v.candidates], identityHints:[...v.identityHints]})); }
-  orderedUrls(providerId: string): string[] {
-    const c=configs[providerId]; if(!c) return [];
-    return [...new Set([c.lastKnownGood, c.primary, ...c.fallbacks, ...c.candidates].filter((v): v is string => Boolean(v)))];
+  observation(providerId:string, url:string): DomainObservation | undefined {
+    const o=observations.get(keyFor(providerId,url)); return o ? {...o} : undefined;
   }
-  mark(providerId:string, url:string, health:DomainHealth, checkedAt=new Date().toISOString()): void {
+  orderedUrls(providerId: string, now=Date.now()): string[] {
+    const c=configs[providerId]; if(!c) return [];
+    const urls=[...new Set([c.lastKnownGood,c.primary,...c.fallbacks,...c.candidates].filter((v):v is string=>Boolean(v)))];
+    return urls.sort((a,b)=>{
+      const oa=observations.get(keyFor(providerId,a)); const ob=observations.get(keyFor(providerId,b));
+      const aCooling=oa?.cooldownUntil ? Date.parse(oa.cooldownUntil)>now : false;
+      const bCooling=ob?.cooldownUntil ? Date.parse(ob.cooldownUntil)>now : false;
+      if(aCooling!==bCooling) return aCooling ? 1 : -1;
+      const score=(o?:DomainObservation)=>(o?.identityVerified?100:0)+(o?.health==='healthy'?50:o?.health==='degraded'?10:o?.health==='dead'?-100:0)-(o?.consecutiveFailures||0)*10-(o?.latencyMs||0)/1000;
+      return score(ob)-score(oa);
+    });
+  }
+  mark(providerId:string,url:string,health:DomainHealth,checkedAt=new Date().toISOString(),details:{identityVerified?:boolean;latencyMs?:number;reason?:string;cooldownMs?:number}={}):void {
     const c=configs[providerId]; if(!c) return;
+    const previous=observations.get(keyFor(providerId,url));
+    const success=health==='healthy' && details.identityVerified===true;
+    const failures=success ? 0 : (previous?.consecutiveFailures||0)+(health==='dead'||health==='degraded'?1:0);
+    const cooldownMs=details.cooldownMs ?? (failures>=3 ? Math.min(300_000,30_000*2**Math.min(failures-3,3)) : 0);
+    const obs:DomainObservation={
+      health,lastCheckedAt:checkedAt,lastSuccessAt:success?checkedAt:(previous?.lastSuccessAt||null),
+      latencyMs:details.latencyMs??null,consecutiveFailures:failures,
+      cooldownUntil:cooldownMs?new Date(Date.parse(checkedAt)+cooldownMs).toISOString():null,
+      identityVerified:details.identityVerified??false,reason:details.reason??null,
+    };
+    observations.set(keyFor(providerId,url),obs);
     c.health=health; c.lastCheckedAt=checkedAt;
-    if(health==='healthy') c.lastKnownGood=url;
+    // A merely reachable page is never promoted. Identity must be proven.
+    if(success) c.lastKnownGood=url;
   }
 }
 export const domainRegistry = new DomainRegistry();
