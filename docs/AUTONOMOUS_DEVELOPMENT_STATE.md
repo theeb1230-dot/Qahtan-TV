@@ -6,6 +6,13 @@
 - Source baseline: 3rb exact SHA `d27b00f1894a63f86786ff04939d3c76b58f6677`
 - Reuse permission: project owner explicitly allowed use, copying, modification and republication within Qahtan TV. Third-party notices remain independently applicable.
 
+## Latest verified GitHub state
+- main SHA: `781e6875bfcfd783cc807d02cdb9e3d46c798243`
+- PR #1 active head after this cycle: `231b74d7738c868d8f6a89d07c70b4e7139bba94`
+- Initial CI failed before tests because setup-node npm caching expected package-lock.json while this source only carries bun.lock.
+- CI workflow corrected: Node 24, current checkout/setup-node actions, no invalid npm cache assumption.
+- Backend P0 hardening started: validated public HTTP(S) destinations, blocks private/reserved IPs before each redirect, manual redirect validation, production debug-fetch disabled, bounded request bodies/timeouts, environment PORT, production CORS allowlist, streaming proxy with backpressure and Range/206 header propagation, no full media buffering.
+
 ## Completed
 - Imported the source tree into Qahtan-TV.
 - Began Qahtan TV identity migration in package metadata, HTML and Stremio manifest.
@@ -28,7 +35,7 @@ EgyDead: tv10.egydead.live/h3/
 - Providers are not yet wired to DomainRegistry.
 - No end-to-end provider is marked Working from this cycle.
 - SyriaLive still requires parser separation from the Yacine implementation.
-- Backend SSRF/proxy hardening remains P0.
+- Backend SSRF/proxy hardening is partially implemented; dedicated security tests and stronger DNS rebinding connection pinning/allow policy remain before P0 closure.
 - Runtime domain identity/health verification and circuit breaker remain pending.
 
 ## Next
