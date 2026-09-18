@@ -16,7 +16,8 @@ export function runDomainRegistryTests(): void {
   assert.equal(registry.getProvider('faselhd')?.mainUrl, 'https://www.fasel-hd.com');
   assert.equal(registry.getProvider('3isk')?.mainUrl, 'https://3iskk.xyz');
   assert.notEqual(registry.getProvider('yacinetv')?.mainUrl, 'https://yacinee-tv.net');
-  assert.notEqual(registry.getProvider('syrialive')?.mainUrl, 'https://www.mewsry.live');
+  assert.equal(registry.getProvider('syrialive')?.mainUrl, 'https://www.mewsry.live');
+  assert.notEqual(registry.getProvider('syrialive')?.mainUrl, registry.getProvider('yacinetv')?.mainUrl);
   // HTTP reachability alone must never promote an unverified domain.
   domainRegistry.mark('faselhd', 'https://fasellhd.rest/main', 'healthy', '2026-09-19T00:00:00.000Z', { identityVerified:false, latencyMs:20 });
   assert.equal(domainRegistry.get('faselhd')?.lastKnownGood, 'https://www.fasel-hd.com');
