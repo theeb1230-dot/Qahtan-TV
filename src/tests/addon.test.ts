@@ -21,8 +21,8 @@ export async function runTests() {
 
   // 1. Manifest Validation
   console.log('\n[Test Suite 1: Manifest Validation]');
-  assert(manifest.id === 'community.re3arabi.addon', 'Manifest ID is correct');
-  assert(manifest.name.includes('Re-3arabi'), 'Manifest Name contains Re-3arabi');
+  assert(manifest.id === 'tv.qahtan.addon', 'Manifest ID is Qahtan TV');
+  assert(manifest.name.includes('قحطان TV') && manifest.name.includes('Qahtan TV'), 'Manifest Name contains Qahtan TV identity');
   assert(manifest.resources.includes('catalog') && manifest.resources.includes('stream'), 'Resources include catalog & stream');
   assert(manifest.types.includes('movie') && manifest.types.includes('series') && manifest.types.includes('tv'), 'Types include movie, series, tv');
   assert((manifest.catalogs || []).length >= 4, 'Has at least 4 catalogs (movies, series, anime, tv)');
