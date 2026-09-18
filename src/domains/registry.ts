@@ -33,6 +33,7 @@ const configs: Record<string, ProviderDomainConfig> = {
   witanime: { providerId:'witanime', primary:'https://witanime.you', fallbacks:['https://ristoanime.me'], candidates:[], lastKnownGood:'https://witanime.you', health:'unknown', lastCheckedAt:null, identityHints:['anime','انمي'] },
   '3isk': { providerId:'3isk', primary:'https://3iskk.xyz', fallbacks:['https://e.3cktv.com'], candidates:[], lastKnownGood:'https://3iskk.xyz', health:'unknown', lastCheckedAt:null, identityHints:['قصة عشق','3isk'] },
   egydead: { providerId:'egydead', primary:'https://tv10.egydead.live/h3/', fallbacks:[], candidates:[], lastKnownGood:'https://tv10.egydead.live/h3/', health:'unknown', lastCheckedAt:null, identityHints:['egydead','ايجي'] },
+  tuktuk_candidate: { providerId:'tuktuk_candidate', primary:'https://zx33.tuktuk-sa.online', fallbacks:[], candidates:[], lastKnownGood:null, health:'unknown', lastCheckedAt:null, identityHints:[] },
 };
 
 const observations = new Map<string, DomainObservation>();
