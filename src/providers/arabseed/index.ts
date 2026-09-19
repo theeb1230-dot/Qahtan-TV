@@ -17,38 +17,43 @@ export class ArabseedProvider extends BaseProvider {
     this.initLogger();
   }
 
-  private fixUrl(url?: string): string {
+  private fixUrl(url?: string, baseUrl = this.mainUrl): string {
     if (!url) return '';
     if (url.startsWith('//')) return `https:${url}`;
-    if (!url.startsWith('http')) return `${this.mainUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+    if (!url.startsWith('http')) return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
     return url;
   }
 
   async searchInternal(query: string): Promise<ProviderItem[]> {
-    const url = `${this.mainUrl}/find/?find=${encodeURIComponent(query)}`;
-    const resp = await this.http.get(url);
-
-    const items: ProviderItem[] = [];
-    resp.$('a.movie__block, div.MovieBlock, div.PostBlock').each((_, el) => {
-      const a = resp.$(el).is('a') ? resp.$(el) : resp.$(el).find('a').first();
-      const title = resp.$(el).find('h3, h4, .BlockItemTitle, .Title').text().trim() || a.attr('title') || '';
-      const href = a.attr('href');
-      if (!title || !href) return;
-
-      const poster = this.fixUrl(resp.$(el).find('img').attr('data-src') || resp.$(el).find('img').attr('src'));
-      const isSeries = href.includes('/series/') || title.includes('مسلسل');
-
-      items.push({
-        id: this.formatId(href.replace(this.mainUrl, '')),
-        provider: this.name,
-        type: isSeries ? 'series' : 'movie',
-        title,
-        poster,
-        url: this.fixUrl(href),
+    return this.withHealthyDomain(async (baseUrl) => {
+      const url = `${baseUrl}/find/?find=${encodeURIComponent(query)}`;
+      const resp = await this.http.get(url);
+  
+      const items: ProviderItem[] = [];
+      resp.$('a.movie__block, div.MovieBlock, div.PostBlock').each((_, el) => {
+        const a = resp.$(el).is('a') ? resp.$(el) : resp.$(el).find('a').first();
+        const title = resp.$(el).find('h3, h4, .BlockItemTitle, .Title').text().trim() || a.attr('title') || '';
+        const href = a.attr('href');
+        if (!title || !href) return;
+  
+        const poster = this.fixUrl(resp.$(el).find('img').attr('data-src') || resp.$(el).find('img').attr('src'), baseUrl);
+        const isSeries = href.includes('/series/') || title.includes('مسلسل');
+  
+        items.push({
+          id: this.formatId(href.replace(baseUrl, '')),
+          provider: this.name,
+          type: isSeries ? 'series' : 'movie',
+          title,
+          poster,
+          url: this.fixUrl(href, baseUrl),
+        });
       });
+  
+      return items;
+    }
+      const identityVerified = items.length > 0;
+      return { value: items, identityVerified };
     });
-
-    return items;
   }
 
   async getCatalogInternal(type: StremioContentType, page: number = 1): Promise<ProviderItem[]> {
