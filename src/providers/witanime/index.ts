@@ -18,40 +18,43 @@ export class WitAnimeProvider extends BaseProvider {
     this.initLogger();
   }
 
-  private fixUrl(url?: string): string {
+  private fixUrl(url?: string, baseUrl = this.mainUrl): string {
     if (!url) return '';
     if (url.startsWith('//')) return `https:${url}`;
-    if (!url.startsWith('http')) return `${this.mainUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+    if (!url.startsWith('http')) return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
     return url;
   }
 
   async searchInternal(query: string): Promise<ProviderItem[]> {
-    const url = `${this.mainUrl}/?search_param=animes&s=${encodeURIComponent(query)}`;
-    const resp = await this.http.get(url, {
-      headers: { 'User-Agent': MOBILE_USER_AGENT },
-    });
-
-    const items: ProviderItem[] = [];
-    resp.$('div.anime-card-container').each((_, el) => {
-      const a = resp.$(el).find('.anime-card-title a');
-      const title = a.text().trim();
-      const href = a.attr('href');
-      if (!title || !href) return;
-
-      const poster = this.fixUrl(resp.$(el).find('img').attr('data-src') || resp.$(el).find('img').attr('src'));
-      const isMovie = title.includes('فيلم') || href.includes('/movie/');
-
-      items.push({
-        id: this.formatId(href.replace(this.mainUrl, '')),
-        provider: this.name,
-        type: isMovie ? 'movie' : 'anime',
-        title,
-        poster,
-        url: this.fixUrl(href),
+    return this.withHealthyDomain(async (baseUrl) => {
+      const url = `${baseUrl}/?search_param=animes&s=${encodeURIComponent(query)}`;
+      const resp = await this.http.get(url, {
+        headers: { 'User-Agent': MOBILE_USER_AGENT },
       });
+  
+      const items: ProviderItem[] = [];
+      resp.$('div.anime-card-container').each((_, el) => {
+        const a = resp.$(el).find('.anime-card-title a');
+        const title = a.text().trim();
+        const href = a.attr('href');
+        if (!title || !href) return;
+  
+        const poster = this.fixUrl(resp.$(el).find('img').attr('data-src') || resp.$(el).find('img').attr('src'), baseUrl);
+        const isMovie = title.includes('فيلم') || href.includes('/movie/');
+  
+        items.push({
+          id: this.formatId(href.replace(baseUrl, '')),
+          provider: this.name,
+          type: isMovie ? 'movie' : 'anime',
+          title,
+          poster,
+          url: this.fixUrl(href, baseUrl),
+        });
+      });
+  
+      const identityVerified = items.length > 0;
+      return { value: items, identityVerified };
     });
-
-    return items;
   }
 
   async getCatalogInternal(type: StremioContentType, page: number = 1): Promise<ProviderItem[]> {

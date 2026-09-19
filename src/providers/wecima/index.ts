@@ -18,40 +18,43 @@ export class WecimaProvider extends BaseProvider {
     this.initLogger();
   }
 
-  private fixUrl(url?: string): string {
+  private fixUrl(url?: string, baseUrl = this.mainUrl): string {
     if (!url) return '';
     if (url.startsWith('//')) return `https:${url}`;
-    if (!url.startsWith('http')) return `${this.mainUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+    if (!url.startsWith('http')) return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
     return url;
   }
 
   async searchInternal(query: string): Promise<ProviderItem[]> {
-    const url = `${this.mainUrl}/search.php?keywords=${encodeURIComponent(query)}`;
-    const resp = await this.http.get(url);
-
-    const items: ProviderItem[] = [];
-    const seen = new Set<string>();
-
-    resp.$('a[href*="watch.php"]').each((_, a) => {
-      const href = resp.$(a).attr('href');
-      const title = resp.$(a).text().trim() || resp.$(a).attr('title') || '';
-      if (!title || !href || seen.has(href) || title.length < 3) return;
-      seen.add(href);
-
-      const poster = this.fixUrl(resp.$(a).find('img').attr('src'));
-      const isSeries = href.includes('series') || title.includes('مسلسل');
-
-      items.push({
-        id: this.formatId(href.replace(this.mainUrl, '')),
-        provider: this.name,
-        type: isSeries ? 'series' : 'movie',
-        title,
-        poster,
-        url: this.fixUrl(href),
+    return this.withHealthyDomain(async (baseUrl) => {
+      const url = `${baseUrl}/search.php?keywords=${encodeURIComponent(query)}`;
+      const resp = await this.http.get(url);
+  
+      const items: ProviderItem[] = [];
+      const seen = new Set<string>();
+  
+      resp.$('a[href*="watch.php"]').each((_, a) => {
+        const href = resp.$(a).attr('href');
+        const title = resp.$(a).text().trim() || resp.$(a).attr('title') || '';
+        if (!title || !href || seen.has(href) || title.length < 3) return;
+        seen.add(href);
+  
+        const poster = this.fixUrl(resp.$(a).find('img').attr('src'), baseUrl);
+        const isSeries = href.includes('series') || title.includes('مسلسل');
+  
+        items.push({
+          id: this.formatId(href.replace(baseUrl, '')),
+          provider: this.name,
+          type: isSeries ? 'series' : 'movie',
+          title,
+          poster,
+          url: this.fixUrl(href, baseUrl),
+        });
       });
+  
+      const identityVerified = items.length > 0;
+      return { value: items, identityVerified };
     });
-
-    return items;
   }
 
   async getCatalogInternal(type: StremioContentType, page: number = 1): Promise<ProviderItem[]> {
