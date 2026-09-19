@@ -52,8 +52,6 @@ export class WecimaProvider extends BaseProvider {
         });
       });
   
-      return items;
-    }
       const identityVerified = items.length > 0;
       return { value: items, identityVerified };
     });
