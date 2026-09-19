@@ -1,10 +1,11 @@
 import { BaseProvider } from '../base.js';
 import { ProviderDetail, ProviderEpisode, ProviderItem, ResolvedStream } from '../../types/provider.js';
 import { StremioContentType } from '../../types/stremio.js';
-import { http, MOBILE_USER_AGENT } from '../../utils/http.js';
+import { HttpClient, MOBILE_USER_AGENT } from '../../utils/this.http.js';
 import { extractStreams } from '../../extractors/index.js';
 
 export class ArabseedProvider extends BaseProvider {
+  private readonly http = new HttpClient();
   id = 'arabseed';
   name = 'Arabseed (عرب سيد)';
   lang = 'ar';
@@ -25,7 +26,7 @@ export class ArabseedProvider extends BaseProvider {
 
   async searchInternal(query: string): Promise<ProviderItem[]> {
     const url = `${this.mainUrl}/find/?find=${encodeURIComponent(query)}`;
-    const resp = await http.get(url);
+    const resp = await this.http.get(url);
 
     const items: ProviderItem[] = [];
     resp.$('a.movie__block, div.MovieBlock, div.PostBlock').each((_, el) => {
@@ -53,7 +54,7 @@ export class ArabseedProvider extends BaseProvider {
   async getCatalogInternal(type: StremioContentType, page: number = 1): Promise<ProviderItem[]> {
     const path = type === 'series' ? 'series' : 'movies';
     const url = `${this.mainUrl}/${path}${page > 1 ? `/page/${page}/` : '/'}`;
-    const resp = await http.get(url);
+    const resp = await this.http.get(url);
 
     const items: ProviderItem[] = [];
     const seen = new Set<string>();
@@ -82,7 +83,7 @@ export class ArabseedProvider extends BaseProvider {
 
   async getMetaInternal(contentId: string, type: StremioContentType): Promise<ProviderDetail | null> {
     const fullUrl = this.fixUrl(contentId);
-    const resp = await http.get(fullUrl);
+    const resp = await this.http.get(fullUrl);
 
     const title = resp.$('h1.Title, h1, h3').first().text().trim() || resp.$('meta[property="og:title"]').attr('content') || 'Arabseed Title';
     const poster = this.fixUrl(resp.$('.Poster img, .post__image img').attr('data-src') || resp.$('.Poster img, .post__image img').attr('src') || resp.$('meta[property="og:image"]').attr('content'));
@@ -124,7 +125,7 @@ export class ArabseedProvider extends BaseProvider {
   async getStreamsInternal(contentId: string, _type: StremioContentType, episodeId?: string): Promise<ResolvedStream[]> {
     const targetPath = episodeId || contentId;
     const fullUrl = this.fixUrl(targetPath);
-    const resp = await http.get(fullUrl);
+    const resp = await this.http.get(fullUrl);
 
     const streams: ResolvedStream[] = [];
     const serverLinks: string[] = [];
@@ -134,7 +135,7 @@ export class ArabseedProvider extends BaseProvider {
     const watchPageUrl = watchBtnHref ? this.fixUrl(watchBtnHref) : `${fullUrl.replace(/\/$/, '')}/watch/`;
 
     try {
-      const watchResp = await http.get(watchPageUrl, {
+      const watchResp = await this.http.get(watchPageUrl, {
         headers: { Referer: fullUrl },
       });
 
@@ -153,7 +154,7 @@ export class ArabseedProvider extends BaseProvider {
     const downloadBtnHref = resp.$('a[href*="/download/"]').attr('href');
     if (downloadBtnHref) {
       try {
-        const downloadResp = await http.get(this.fixUrl(downloadBtnHref), {
+        const downloadResp = await this.http.get(this.fixUrl(downloadBtnHref), {
           headers: { Referer: fullUrl },
         });
         downloadResp.$('a[href*="mixdrop"], a[href*="dood"], a[href*="myvid"]').each((_, a) => {
