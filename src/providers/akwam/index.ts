@@ -1,10 +1,11 @@
 import { BaseProvider } from '../base.js';
 import { ProviderDetail, ProviderEpisode, ProviderItem, ResolvedStream } from '../../types/provider.js';
 import { StremioContentType } from '../../types/stremio.js';
-import { http } from '../../utils/http.js';
+import { HttpClient } from '../../utils/this.http.js';
 import { extractStreams } from '../../extractors/index.js';
 
 export class AkwamProvider extends BaseProvider {
+  private readonly http = new HttpClient();
   id = 'akwam';
   name = 'Akwam (أكوام)';
   lang = 'ar';
@@ -25,7 +26,7 @@ export class AkwamProvider extends BaseProvider {
 
   async searchInternal(query: string): Promise<ProviderItem[]> {
     const url = `${this.mainUrl}/search?q=${encodeURIComponent(query)}`;
-    const resp = await http.get(url);
+    const resp = await this.http.get(url);
     const items: ProviderItem[] = [];
 
     resp.$('div.col-lg-auto.col-md-4.col-6, div.widget-body div.entry-box').each((_, el) => {
@@ -55,7 +56,7 @@ export class AkwamProvider extends BaseProvider {
   async getCatalogInternal(type: StremioContentType, page: number = 1): Promise<ProviderItem[]> {
     const path = type === 'series' ? 'series' : 'movies';
     const url = `${this.mainUrl}/${path}${page > 1 ? `?page=${page}` : ''}`;
-    const resp = await http.get(url);
+    const resp = await this.http.get(url);
     const items: ProviderItem[] = [];
 
     resp.$('div.col-lg-auto.col-md-4.col-6, div.widget-body div.entry-box').each((_, el) => {
@@ -83,7 +84,7 @@ export class AkwamProvider extends BaseProvider {
 
   async getMetaInternal(contentId: string, type: StremioContentType): Promise<ProviderDetail | null> {
     const fullUrl = this.fixUrl(contentId);
-    const resp = await http.get(fullUrl);
+    const resp = await this.http.get(fullUrl);
 
     const title = resp.$('h1.entry-title').text().trim() || resp.$('meta[property="og:title"]').attr('content') || 'Akwam Title';
     const poster = this.fixUrl(resp.$('meta[property="og:image"]').attr('content') || resp.$('.picture img').attr('src'));
@@ -127,7 +128,7 @@ export class AkwamProvider extends BaseProvider {
   async getStreamsInternal(contentId: string, _type: StremioContentType, episodeId?: string): Promise<ResolvedStream[]> {
     const targetPath = episodeId || contentId;
     const fullUrl = this.fixUrl(targetPath);
-    const resp = await http.get(fullUrl);
+    const resp = await this.http.get(fullUrl);
 
     const streams: ResolvedStream[] = [];
     const directLinks: string[] = [];
@@ -139,7 +140,7 @@ export class AkwamProvider extends BaseProvider {
 
     for (const dl of directLinks) {
       try {
-        const dlResp = await http.get(dl, { referer: fullUrl });
+        const dlResp = await this.http.get(dl, { referer: fullUrl });
         const extracted = await extractStreams(dl, fullUrl);
         streams.push(...extracted);
 
