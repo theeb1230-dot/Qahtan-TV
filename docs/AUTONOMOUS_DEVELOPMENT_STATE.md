@@ -1,16 +1,15 @@
 # Autonomous Development State
 
 ## Current cycle
-- Start main SHA: `a4a49c631aa5ce0c9020eb0f4144ba04b18c5a1f`; default branch `main`.
-- No open PR existed at cycle start. Main CI run 35470441538 was green on the start SHA; no Releases exist.
-- Active PR: #15 on `qahtan/akwam-domain-e2e-v2`; initial implementation head `37f189f8787da3368a8cca6c3d71701df58154db`.
-- End main SHA remains `a4a49c631aa5ce0c9020eb0f4144ba04b18c5a1f` until #15 exact-head CI is green and mergeable.
-- Source baseline: 3rb exact SHA `d27b00f1894a63f86786ff04939d3c76b58f6677`. Explicit reuse permission for Qahtan TV is documented but is not treated as a third-party license grant.
+- Start/main SHA: `894df0b89d05da7be59035e1ac6c170314d24e44`; default branch `main`.
+- No open PR existed at cycle start. PR #17/ArabSeed is merged on main.
+- Active PR: #18 `qahtan/anime4up-domain-continuity`; implementation head started at `8ba0ac2793bacd90ea5d857806d6f783e0dde91d`.
+- Source baseline: 3rb exact SHA `d27b00f1894a63f86786ff04939d3c76b58f6677`. Explicit reuse permission is documented but is not treated as a third-party license grant.
 
 ## Blockers ordered by release impact
 ### P0
-1. Complete DomainRegistry migration for every provider operation. Akwam is the current reference slice. Acceptance: catalog uses health-ranked verified selection; metadata/episodes/playback preserve the verified absolute content origin; no HTTP-200-only promotion; exact-head lint/tests/build green; deterministic contracts cover domain continuity.
-2. Runtime E2E evidence per provider: discovery/search -> catalog -> metadata/details -> seasons/episodes where applicable -> non-empty resolved stream with required headers/referrer/cookies. Parser presence, fixtures, HTTP 200 and CI alone do not qualify.
+1. Complete DomainRegistry migration for every provider operation. Akwam, WeCima and ArabSeed are merged reference slices; Anime4Up is active. Acceptance: discovery/catalog use health-ranked verified selection; metadata/episodes/playback preserve the verified absolute content origin; no HTTP-200-only promotion; exact-head lint/tests/build green.
+2. Runtime E2E evidence per provider: discovery/search -> catalog -> metadata/details -> seasons/episodes where applicable -> non-empty resolved stream with required headers/referrer/cookies.
 3. SyriaLive remains independent/fail-closed until its own source contract is verified; never alias Yacine.
 4. `https://zx33.tuktuk-sa.online` remains quarantined until identity fingerprint, content type and parser prerequisites are proven.
 5. Complete security audit for all outbound/debug/proxy/extractor paths while preserving streaming/backpressure and Range/206.
@@ -24,51 +23,49 @@
 - UX polish/refactor only after P0/P1 closure.
 
 ## Work performed this cycle
-- Audited main, branches, open PRs, Actions, Releases, current state document, provider base/registry and Akwam implementation.
-- Confirmed the root P0-2 gap: Akwam search used verified selection, but catalog/meta/episodes/streams still fell back to `this.mainUrl`.
-- PR #15 changes Akwam catalog to `withHealthyDomain()` and requires non-empty parser output before domain promotion.
-- Akwam discovery/catalog IDs now retain absolute URLs from the verified selected domain. Metadata and episode links resolve relative to that content origin, and stream/watch/download links continue on the same origin instead of silently returning to the stale hardcoded domain.
-- Absolute content URLs already emitted by verified discovery/catalog are preserved for downstream metadata/stream work.
-- Stream output remains filtered to http(s); no Working claim is made without live E2E evidence.
-- SyriaLive remains fail-closed; tuktuk remains quarantined.
+- Re-read GitHub state rather than inheriting the previous percentage: main is the ArabSeed merge SHA and there was no open PR.
+- Confirmed Anime4Up root P0-2 gap: search used verified selection while catalog/meta/episodes/streams still relied on the hardcoded main URL.
+- PR #18 moves Anime4Up catalog through `withHealthyDomain()` and requires non-empty parser output before identity promotion.
+- Search/catalog now emit absolute content IDs from the verified selected origin; metadata and episode links preserve that origin downstream.
+- Stream extraction keeps the content-page referrer and filters final output to HTTP(S).
+- SyriaLive remains fail-closed and tuktuk remains quarantined.
 
 ## CI/tests/artifacts
-- Start-main CI: green (run 35470441538).
-- PR #15 exact-head CI: pending/not yet evidenced at the time of this state update; therefore #15 is not merged and its implementation receives no tested-credit uplift yet.
-- Releases/artifacts: none claimed release-ready.
+- PR #18 exact implementation head `8ba0ac2793bacd90ea5d857806d6f783e0dde91d`: CI run 35474347285 queued at state-update time. No tested-credit is granted until the final exact head is green.
+- Releases/artifacts: no release-ready artifact claimed.
 
 ## Provider runtime classification
 - Working: none.
-- Partial: Akwam, Yacine TV, WeCima, FaselHD, ArabSeed, Anime4Up, WitAnime, 3isk, EgyDead. Akwam has a stronger full-path domain-continuity implementation in PR #15 but lacks exact-head CI and live E2E stream proof at this snapshot.
+- Partial: Akwam, Yacine TV, WeCima, FaselHD, ArabSeed, Anime4Up, WitAnime, 3isk, EgyDead.
 - Broken/degraded: SyriaLive, intentionally fail-closed pending independent source/parser verification.
 - Quarantined: tuktuk candidate; identity/content contract unproven.
 
 ## Weighted verified completion
-Recalculated from current evidence; pending PR code is capped as untested implementation and does not inflate the score.
+Recalculated from current evidence. Pending Anime4Up code is capped as untested implementation.
 
 | Category | Weight | Verified fraction | Earned | Evidence / cap reason |
 |---|---:|---:|---:|---|
-| Repo/build/CI baseline | 5 | 0.90 | 4.5 | start main exact-SHA CI green; no release artifact |
+| Repo/build/CI baseline | 5 | 0.90 | 4.5 | merged main baseline; active exact-head CI pending |
 | Qahtan identity + provenance/licenses | 5 | 0.45 | 2.3 | identity/provenance baseline; third-party audit open |
-| DomainRegistry + identity verification + failover | 12 | 0.60 | 7.2 | tested foundation/search migration; Akwam full-path change pending CI |
-| Provider health/circuit/ranking/cache | 10 | 0.75 | 7.5 | deterministic health/cooldown/ranking/cache/coalescing tests exist; runtime proof incomplete |
+| DomainRegistry + identity verification + failover | 12 | 0.75 | 9.0 | tested foundation plus merged Akwam/WeCima/ArabSeed full-path continuity; Anime4Up pending CI |
+| Provider health/circuit/ranking/cache | 10 | 0.75 | 7.5 | deterministic health/cooldown/ranking/cache/coalescing tests; runtime proof incomplete |
 | Backend/network/proxy security | 13 | 0.75 | 9.8 | security contracts exist; full outbound audit open |
-| Discovery/catalog/search coverage | 8 | 0.60 | 4.8 | implementation/CI baseline, no provider runtime E2E proof |
-| Metadata/details + seasons/episodes | 8 | 0.45 | 3.6 | implementation exists; Akwam migration pending CI/runtime |
+| Discovery/catalog/search coverage | 8 | 0.60 | 4.8 | implementation/CI baseline; no provider runtime E2E proof |
+| Metadata/details + seasons/episodes | 8 | 0.60 | 4.8 | several full-path migrations merged/tested; runtime proof absent |
 | Stream resolution/extractors | 10 | 0.45 | 4.5 | implementation exists; runtime stream proof incomplete |
 | End-to-end provider runtime evidence | 15 | 0.00 | 0.0 | 0/10 providers proven end-to-end |
 | Stremio compatibility/regression | 4 | 0.60 | 2.4 | tests exist; no current live E2E proof |
 | Observability/performance/error isolation | 3 | 0.60 | 1.8 | logging/cache/isolation partly tested |
-| Release gate/artifact/runtime readiness | 7 | 0.30 | 2.1 | no v1.0 release; several P0/P1 gates open |
+| Release gate/artifact/runtime readiness | 7 | 0.30 | 2.1 | no v1.0 release; P0/P1 gates remain |
 
-**Overall Verified Product Completion: 50.5%.**
+**Overall Verified Product Completion: 53.5%.**
 
 ## Independent completion metrics
 - Runtime-Verified Provider Completion: **0/10 = 0.0%**. Working: none. Partial: Akwam, Yacine TV, WeCima, FaselHD, ArabSeed, Anime4Up, WitAnime, 3isk, EgyDead. Broken/degraded: SyriaLive.
-- Release Gate Completion: **3/7 = 42.9%**. Fixed denominator remains seven. Proven: identity baseline, current-main CI baseline, tested DomainRegistry/health foundation. Unproven: complete security audit, no open P0/P1, advertised-provider E2E, exact release-SHA/artifact readiness.
+- Release Gate Completion: **3/7 = 42.9%**. Fixed denominator seven. Proven: identity baseline, current-main CI baseline, tested DomainRegistry/health foundation. Unproven: complete security audit, no open P0/P1, advertised-provider E2E, exact release-SHA/artifact readiness.
 
-## Why the percentages did not rise
-This cycle added meaningful Akwam implementation, but the exact PR head had not yet produced green CI or live E2E evidence at this snapshot. The scoring rules cap untested implementation and prohibit using code presence as E2E proof, so retaining 50.5% is more accurate than manufacturing progress.
+## Why the percentages changed
+The score is recalculated from repository evidence, not inherited. Merged/tested full-path continuity for Akwam, WeCima and ArabSeed raises DomainRegistry/metadata confidence compared with the stale prior state document. Anime4Up receives no tested uplift while its exact-head CI is pending. E2E remains zero because no provider has live proof through stream resolution.
 
 ## Next target
-First finish PR #15: inspect exact-head CI, repair failures on the same branch, add deterministic domain-continuity coverage if required, and merge only when green/mergeable. Then apply the proven full-path domain contract to the next highest-impact provider and begin live E2E evidence collection.
+Finish PR #18 on the same branch: inspect exact-head CI, repair any code/test failure, and merge only when green and mergeable. Then migrate WitAnime/3isk/EgyDead full paths and move aggressively into live provider E2E evidence collection.
