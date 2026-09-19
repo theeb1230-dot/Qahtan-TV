@@ -2,6 +2,7 @@ import { IProvider, ProviderDetail, ProviderItem, ResolvedStream } from '../type
 import { StremioContentType } from '../types/stremio.js';
 import { globalCache } from '../utils/cache.js';
 import { Logger } from '../utils/logger.js';
+import { providerHealthManager } from '../domains/health.js';
 
 export abstract class BaseProvider implements IProvider {
   abstract id: string;
@@ -14,6 +15,18 @@ export abstract class BaseProvider implements IProvider {
 
   protected initLogger() {
     this.logger = new Logger(this.name);
+  }
+
+  /**
+   * Execute a provider request through the centralized domain health policy.
+   * Providers must verify their own identity/parser prerequisites before
+   * returning identityVerified=true. HTTP reachability alone is never enough.
+   */
+  protected async withHealthyDomain<T>(
+    attempt: (baseUrl: string) => Promise<{ value: T; identityVerified: boolean }>,
+  ): Promise<T> {
+    const result = await providerHealthManager.execute(this.id, attempt);
+    return result.value;
   }
 
   // Helper to format namespaced IDs: e.g. "akwam:series/123"
@@ -42,9 +55,7 @@ export abstract class BaseProvider implements IProvider {
     try {
       this.logger.debug(`Searching for query: ${query}`);
       const results = await this.searchInternal(query);
-      if (results && results.length > 0) {
-        globalCache.set(cacheKey, results, 180);
-      }
+      if (results && results.length > 0) globalCache.set(cacheKey, results, 180);
       return results;
     } catch (err) {
       this.logger.error(`Search error for "${query}": ${(err as Error).message}`);
@@ -54,17 +65,13 @@ export abstract class BaseProvider implements IProvider {
 
   async getCatalog(type: StremioContentType, page: number = 1): Promise<ProviderItem[]> {
     if (!this.supportedTypes.includes(type)) return [];
-
     const cacheKey = `catalog:${this.id}:${type}:${page}`;
     const cached = globalCache.get<ProviderItem[]>(cacheKey);
     if (cached) return cached;
-
     try {
       this.logger.debug(`Fetching catalog type=${type} page=${page}`);
       const results = await this.getCatalogInternal(type, page);
-      if (results && results.length > 0) {
-        globalCache.set(cacheKey, results, 300);
-      }
+      if (results && results.length > 0) globalCache.set(cacheKey, results, 300);
       return results;
     } catch (err) {
       this.logger.error(`Catalog error for type ${type} page ${page}: ${(err as Error).message}`);
@@ -77,13 +84,10 @@ export abstract class BaseProvider implements IProvider {
     const cacheKey = `meta:${this.id}:${rawId}`;
     const cached = globalCache.get<ProviderDetail>(cacheKey);
     if (cached) return cached;
-
     try {
       this.logger.debug(`Fetching meta for ${rawId} (${type})`);
       const meta = await this.getMetaInternal(rawId, type);
-      if (meta) {
-        globalCache.set(cacheKey, meta, 600);
-      }
+      if (meta) globalCache.set(cacheKey, meta, 600);
       return meta;
     } catch (err) {
       this.logger.error(`Meta error for ${rawId}: ${(err as Error).message}`);
@@ -97,13 +101,10 @@ export abstract class BaseProvider implements IProvider {
     const cacheKey = `streams:${this.id}:${rawContentId}:${rawEpisodeId || 'single'}`;
     const cached = globalCache.get<ResolvedStream[]>(cacheKey);
     if (cached) return cached;
-
     try {
       this.logger.debug(`Resolving streams for ${rawContentId} ep=${rawEpisodeId || 'none'}`);
       const streams = await this.getStreamsInternal(rawContentId, type, rawEpisodeId);
-      if (streams.length > 0) {
-        globalCache.set(cacheKey, streams, 180); // 3 minutes cache for live streams
-      }
+      if (streams.length > 0) globalCache.set(cacheKey, streams, 180);
       return streams;
     } catch (err) {
       this.logger.error(`Stream resolution error: ${(err as Error).message}`);
