@@ -2,13 +2,13 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import path from 'path';
 import dns from 'node:dns';
-import net from 'node:net';
 import { Readable } from 'node:stream';
 import { createServer as createViteServer } from 'vite';
 import { stremioRouter } from './src/addon/router.js';
 import { registry } from './src/providers/index.js';
 import { StremioContentType } from './src/types/stremio.js';
 import { Logger } from './src/utils/logger.js';
+import { safeFetch } from './src/security/network.js';
 
 try { dns.setDefaultResultOrder('ipv4first'); } catch {}
 
@@ -16,48 +16,6 @@ const logger = new Logger('Server');
 const PORT = Number.parseInt(process.env.PORT || '3000', 10);
 const isProduction = process.env.NODE_ENV === 'production';
 const allowedOrigins = (process.env.CORS_ORIGINS || '').split(',').map(v => v.trim()).filter(Boolean);
-
-function isForbiddenIp(address: string): boolean {
-  const ip = address.toLowerCase().split('%')[0];
-  if (net.isIPv4(ip)) {
-    const p = ip.split('.').map(Number);
-    return p[0] === 10 || p[0] === 127 || p[0] === 0 ||
-      (p[0] === 169 && p[1] === 254) || (p[0] === 172 && p[1] >= 16 && p[1] <= 31) ||
-      (p[0] === 192 && p[1] === 168) || (p[0] === 100 && p[1] >= 64 && p[1] <= 127) ||
-      p[0] >= 224;
-  }
-  if (net.isIPv6(ip)) {
-    return ip === '::1' || ip === '::' || ip.startsWith('fc') || ip.startsWith('fd') ||
-      ip.startsWith('fe8') || ip.startsWith('fe9') || ip.startsWith('fea') || ip.startsWith('feb') ||
-      ip.startsWith('ff') || ip.startsWith('::ffff:127.') || ip.startsWith('::ffff:10.') ||
-      ip.startsWith('::ffff:192.168.');
-  }
-  return true;
-}
-
-async function assertSafePublicUrl(raw: string): Promise<URL> {
-  const url = new URL(raw);
-  if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Only HTTP(S) URLs are allowed');
-  if (url.username || url.password) throw new Error('URL credentials are not allowed');
-  if (url.hostname === 'localhost' || url.hostname.endsWith('.localhost')) throw new Error('Local destinations are blocked');
-  const resolved = await dns.promises.lookup(url.hostname, { all: true, verbatim: true });
-  if (!resolved.length || resolved.some(r => isForbiddenIp(r.address))) throw new Error('Private or reserved destination is blocked');
-  return url;
-}
-
-async function safeFetch(raw: string, init: RequestInit, maxRedirects = 3): Promise<globalThis.Response> {
-  let current = (await assertSafePublicUrl(raw)).toString();
-  for (let i = 0; i <= maxRedirects; i++) {
-    await assertSafePublicUrl(current);
-    const response = await fetch(current, { ...init, redirect: 'manual' });
-    if (![301,302,303,307,308].includes(response.status)) return response;
-    if (i === maxRedirects) throw new Error('Too many redirects');
-    const location = response.headers.get('location');
-    if (!location) throw new Error('Redirect missing location');
-    current = new URL(location, current).toString();
-  }
-  throw new Error('Redirect validation failed');
-}
 
 async function startServer() {
   const app = express();
