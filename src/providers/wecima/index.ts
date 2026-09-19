@@ -1,11 +1,12 @@
 import { BaseProvider } from '../base.js';
 import { ProviderDetail, ProviderEpisode, ProviderItem, ResolvedStream } from '../../types/provider.js';
 import { StremioContentType } from '../../types/stremio.js';
-import { http, MOBILE_USER_AGENT } from '../../utils/http.js';
+import { HttpClient, MOBILE_USER_AGENT } from '../../utils/this.http.js';
 import { safeBase64Decode } from '../../utils/crypto.js';
 import { extractStreams } from '../../extractors/index.js';
 
 export class WecimaProvider extends BaseProvider {
+  private readonly http = new HttpClient();
   id = 'wecima';
   name = 'We Cima (وي سيما)';
   lang = 'ar';
@@ -26,7 +27,7 @@ export class WecimaProvider extends BaseProvider {
 
   async searchInternal(query: string): Promise<ProviderItem[]> {
     const url = `${this.mainUrl}/search.php?keywords=${encodeURIComponent(query)}`;
-    const resp = await http.get(url);
+    const resp = await this.http.get(url);
 
     const items: ProviderItem[] = [];
     const seen = new Set<string>();
@@ -59,7 +60,7 @@ export class WecimaProvider extends BaseProvider {
       ? `${this.mainUrl}/episodes.php${pageParam}`
       : `${this.mainUrl}/movies.php${pageParam}`;
 
-    const resp = await http.get(url);
+    const resp = await this.http.get(url);
 
     const items: ProviderItem[] = [];
     const seen = new Set<string>();
@@ -87,7 +88,7 @@ export class WecimaProvider extends BaseProvider {
 
   async getMetaInternal(contentId: string, type: StremioContentType): Promise<ProviderDetail | null> {
     const fullUrl = this.fixUrl(contentId);
-    const resp = await http.get(fullUrl);
+    const resp = await this.http.get(fullUrl);
 
     const title = resp.$('h1').first().text().trim() || resp.$('title').text().trim() || 'WeCima Title';
     const poster = this.fixUrl(resp.$('meta[property="og:image"]').attr('content') || resp.$('.video-bibplayer-poster').css('background-image')?.replace(/url\(['"]?(.*?)['"]?\)/, '$1'));
@@ -113,7 +114,7 @@ export class WecimaProvider extends BaseProvider {
     const playUrl = vidMatch ? `${this.mainUrl}/play.php?vid=${vidMatch[1]}` : fullUrl;
 
     try {
-      const playRes = await http.get(playUrl, { headers: { Referer: fullUrl } });
+      const playRes = await this.http.get(playUrl, { headers: { Referer: fullUrl } });
       const iframes: string[] = [];
       playRes.$('iframe').each((_, ifr) => {
         const src = playRes.$(ifr).attr('src');
