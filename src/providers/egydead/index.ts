@@ -1,10 +1,11 @@
 import { BaseProvider } from '../base.js';
 import { ProviderDetail, ProviderEpisode, ProviderItem, ResolvedStream } from '../../types/provider.js';
 import { StremioContentType } from '../../types/stremio.js';
-import { http, MOBILE_USER_AGENT } from '../../utils/http.js';
+import { HttpClient, MOBILE_USER_AGENT } from '../../utils/http.js';
 import { extractStreams } from '../../extractors/index.js';
 
 export class EgydeadProvider extends BaseProvider {
+  private readonly http = new HttpClient();
   id = 'egydead';
   name = 'Egydead (إيجي ديد)';
   lang = 'ar';
@@ -25,7 +26,7 @@ export class EgydeadProvider extends BaseProvider {
 
   async searchInternal(query: string): Promise<ProviderItem[]> {
     const url = `${this.mainUrl}/?s=${encodeURIComponent(query)}`;
-    const resp = await http.get(url, {
+    const resp = await this.http.get(url, {
       headers: { 'User-Agent': MOBILE_USER_AGENT },
     });
 
@@ -55,7 +56,7 @@ export class EgydeadProvider extends BaseProvider {
   async getCatalogInternal(type: StremioContentType, page: number = 1): Promise<ProviderItem[]> {
     const path = type === 'series' ? 'category/series' : 'category/movies';
     const url = `${this.mainUrl}/${path}/page/${page}`;
-    const resp = await http.get(url, {
+    const resp = await this.http.get(url, {
       headers: { 'User-Agent': MOBILE_USER_AGENT },
     });
 
@@ -83,7 +84,7 @@ export class EgydeadProvider extends BaseProvider {
 
   async getMetaInternal(contentId: string, type: StremioContentType): Promise<ProviderDetail | null> {
     const fullUrl = this.fixUrl(contentId);
-    const resp = await http.get(fullUrl, {
+    const resp = await this.http.get(fullUrl, {
       headers: { 'User-Agent': MOBILE_USER_AGENT },
     });
 
@@ -132,7 +133,7 @@ export class EgydeadProvider extends BaseProvider {
 
     try {
       const watchUrl = `${fullUrl}?view=watch`;
-      const resp = await http.post(watchUrl, {
+      const resp = await this.http.post(watchUrl, {
         form: { View: '1' },
         headers: {
           'User-Agent': MOBILE_USER_AGENT,

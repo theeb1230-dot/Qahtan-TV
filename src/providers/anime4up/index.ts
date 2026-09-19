@@ -1,11 +1,12 @@
 import { BaseProvider } from '../base.js';
 import { ProviderDetail, ProviderEpisode, ProviderItem, ResolvedStream } from '../../types/provider.js';
 import { StremioContentType } from '../../types/stremio.js';
-import { http, MOBILE_USER_AGENT } from '../../utils/http.js';
+import { HttpClient, MOBILE_USER_AGENT } from '../../utils/http.js';
 import { safeBase64Decode } from '../../utils/crypto.js';
 import { extractStreams } from '../../extractors/index.js';
 
 export class Anime4upProvider extends BaseProvider {
+  private readonly http = new HttpClient();
   id = 'anime4up';
   name = 'Anime4up (أنمي فور اب)';
   lang = 'ar';
@@ -26,7 +27,7 @@ export class Anime4upProvider extends BaseProvider {
 
   async searchInternal(query: string): Promise<ProviderItem[]> {
     const url = `${this.mainUrl}/?search_string=${encodeURIComponent(query)}`;
-    const resp = await http.get(url, {
+    const resp = await this.http.get(url, {
       headers: { 'User-Agent': MOBILE_USER_AGENT },
     });
 
@@ -56,7 +57,7 @@ export class Anime4upProvider extends BaseProvider {
   async getCatalogInternal(type: StremioContentType, page: number = 1): Promise<ProviderItem[]> {
     const path = type === 'movie' ? 'anime-type/movie' : 'anime-season';
     const url = `${this.mainUrl}/${path}/page/${page}/`;
-    const resp = await http.get(url, {
+    const resp = await this.http.get(url, {
       headers: { 'User-Agent': MOBILE_USER_AGENT },
     });
 
@@ -84,7 +85,7 @@ export class Anime4upProvider extends BaseProvider {
 
   async getMetaInternal(contentId: string, type: StremioContentType): Promise<ProviderDetail | null> {
     const fullUrl = this.fixUrl(contentId);
-    const resp = await http.get(fullUrl, {
+    const resp = await this.http.get(fullUrl, {
       headers: { 'User-Agent': MOBILE_USER_AGENT },
     });
 
@@ -127,7 +128,7 @@ export class Anime4upProvider extends BaseProvider {
   async getStreamsInternal(contentId: string, _type: StremioContentType, episodeId?: string): Promise<ResolvedStream[]> {
     const targetPath = episodeId || contentId;
     const fullUrl = this.fixUrl(targetPath);
-    const resp = await http.get(fullUrl, {
+    const resp = await this.http.get(fullUrl, {
       headers: { 'User-Agent': MOBILE_USER_AGENT },
     });
 

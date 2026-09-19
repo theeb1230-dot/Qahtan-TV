@@ -1,12 +1,13 @@
 import { BaseProvider } from '../base.js';
 import { ProviderDetail, ProviderEpisode, ProviderItem, ResolvedStream } from '../../types/provider.js';
 import { StremioContentType } from '../../types/stremio.js';
-import { http } from '../../utils/http.js';
+import { HttpClient } from '../../utils/http.js';
 import { safeBase64Decode } from '../../utils/crypto.js';
 import { unpackAll } from '../../utils/packer.js';
 import { extractStreams } from '../../extractors/index.js';
 
 export class ThreeIskProvider extends BaseProvider {
+  private readonly http = new HttpClient();
   id = '3isk';
   name = '3isk - قصة عشق (مسلسلات تركية)';
   lang = 'ar';
@@ -40,7 +41,7 @@ export class ThreeIskProvider extends BaseProvider {
 
   async searchInternal(query: string): Promise<ProviderItem[]> {
     const url = `${this.mainUrl}/search.php?keywords=${encodeURIComponent(query)}`;
-    const resp = await http.get(url);
+    const resp = await this.http.get(url);
 
     const items: ProviderItem[] = [];
     resp.$('div.post-item, div.block-post, div.video-item').each((_, el) => {
@@ -68,7 +69,7 @@ export class ThreeIskProvider extends BaseProvider {
   async getCatalogInternal(type: StremioContentType, page: number = 1): Promise<ProviderItem[]> {
     const path = type === 'movie' ? 'w-mvs' : 'w-srs';
     const url = `${this.mainUrl}/${path}/${page > 1 ? `page/${page}/` : ''}`;
-    const resp = await http.get(url);
+    const resp = await this.http.get(url);
 
     const items: ProviderItem[] = [];
     const seenHrefs = new Set<string>();
@@ -100,7 +101,7 @@ export class ThreeIskProvider extends BaseProvider {
 
   async getMetaInternal(contentId: string, type: StremioContentType): Promise<ProviderDetail | null> {
     const fullUrl = this.fixUrl(contentId);
-    const resp = await http.get(fullUrl);
+    const resp = await this.http.get(fullUrl);
 
     const title = resp.$('h1.entry-title, .post-title').text().trim() || resp.$('meta[property="og:title"]').attr('content') || '3isk Title';
     const poster = this.fixUrl(resp.$('.post-thumbnail img').attr('src') || resp.$('meta[property="og:image"]').attr('content'));
@@ -141,7 +142,7 @@ export class ThreeIskProvider extends BaseProvider {
   async getStreamsInternal(contentId: string, _type: StremioContentType, episodeId?: string): Promise<ResolvedStream[]> {
     const targetPath = episodeId || contentId;
     const fullUrl = this.fixUrl(targetPath);
-    const resp = await http.get(fullUrl);
+    const resp = await this.http.get(fullUrl);
 
     const streams: ResolvedStream[] = [];
 
@@ -154,7 +155,7 @@ export class ThreeIskProvider extends BaseProvider {
     if (actionUrl && newsVal) {
       try {
         // Submit step 1 to aa.3isk.icu
-        const step2Resp = await http.post(this.fixUrl(actionUrl), {
+        const step2Resp = await this.http.post(this.fixUrl(actionUrl), {
           form: { news: newsVal, u: uVal },
           headers: { Referer: fullUrl },
         });
@@ -168,7 +169,7 @@ export class ThreeIskProvider extends BaseProvider {
           const step3News = nextNewsMatch[1];
 
           // Submit step 2
-          const step3Resp = await http.post(step3Url, {
+          const step3Resp = await this.http.post(step3Url, {
             form: { news: step3News, u: '' },
             headers: { Referer: actionUrl },
           });
@@ -188,7 +189,7 @@ export class ThreeIskProvider extends BaseProvider {
 
           for (const embedUrl of embedUrls) {
             try {
-              const embedResp = await http.get(embedUrl, {
+              const embedResp = await this.http.get(embedUrl, {
                 headers: { Referer: step3Url },
               });
 
@@ -198,7 +199,7 @@ export class ThreeIskProvider extends BaseProvider {
 
               if (ukrcdnIfr) {
                 const ukrUrl = this.fixUrl(ukrcdnIfr);
-                const ukrResp = await http.get(ukrUrl, {
+                const ukrResp = await this.http.get(ukrUrl, {
                   headers: { Referer: embedUrl },
                 });
 
@@ -206,7 +207,7 @@ export class ThreeIskProvider extends BaseProvider {
                 const playbackApiMatch = ukrResp.text.match(/fetch\s*\(\s*['"]([^'"]+playback[^'"]*)['"]/);
                 if (playbackApiMatch) {
                   const playbackUrl = playbackApiMatch[1].replace(/\\\//g, '/');
-                  const pbResp = await http.get(playbackUrl, {
+                  const pbResp = await this.http.get(playbackUrl, {
                     headers: {
                       Referer: ukrUrl,
                       Accept: 'application/json',

@@ -2,10 +2,11 @@ import vm from 'node:vm';
 import { BaseProvider } from '../base.js';
 import { ProviderDetail, ProviderEpisode, ProviderItem, ResolvedStream } from '../../types/provider.js';
 import { StremioContentType } from '../../types/stremio.js';
-import { http, MOBILE_USER_AGENT } from '../../utils/http.js';
+import { HttpClient, MOBILE_USER_AGENT } from '../../utils/http.js';
 import { extractStreams } from '../../extractors/index.js';
 
 export class FaselhdProvider extends BaseProvider {
+  private readonly http = new HttpClient();
   id = 'faselhd';
   name = 'FaselHD (فاصل إعلاني)';
   lang = 'ar';
@@ -26,7 +27,7 @@ export class FaselhdProvider extends BaseProvider {
 
   async searchInternal(query: string): Promise<ProviderItem[]> {
     const url = `${this.mainUrl}/?s=${encodeURIComponent(query)}`;
-    const resp = await http.get(url, {
+    const resp = await this.http.get(url, {
       headers: { 'User-Agent': MOBILE_USER_AGENT },
     });
 
@@ -56,7 +57,7 @@ export class FaselhdProvider extends BaseProvider {
   async getCatalogInternal(type: StremioContentType, page: number = 1): Promise<ProviderItem[]> {
     const path = type === 'anime' ? 'anime' : (type === 'series' ? 'series' : 'movies');
     const url = `${this.mainUrl}/${path}${page > 1 ? `/page/${page}` : ''}`;
-    const resp = await http.get(url);
+    const resp = await this.http.get(url);
 
     const items: ProviderItem[] = [];
     resp.$('div.postDiv').each((_, el) => {
@@ -82,7 +83,7 @@ export class FaselhdProvider extends BaseProvider {
 
   async getMetaInternal(contentId: string, type: StremioContentType): Promise<ProviderDetail | null> {
     const fullUrl = this.fixUrl(contentId);
-    const resp = await http.get(fullUrl);
+    const resp = await this.http.get(fullUrl);
 
     const title = resp.$('h1.title').text().trim() || resp.$('meta[property="og:title"]').attr('content') || 'FaselHD Title';
     const poster = this.fixUrl(resp.$('.posterImg img').attr('src') || resp.$('meta[property="og:image"]').attr('content'));
@@ -124,7 +125,7 @@ export class FaselhdProvider extends BaseProvider {
   async getStreamsInternal(contentId: string, _type: StremioContentType, episodeId?: string): Promise<ResolvedStream[]> {
     const targetPath = episodeId || contentId;
     const fullUrl = this.fixUrl(targetPath);
-    const resp = await http.get(fullUrl);
+    const resp = await this.http.get(fullUrl);
 
     const streams: ResolvedStream[] = [];
 
@@ -135,7 +136,7 @@ export class FaselhdProvider extends BaseProvider {
     if (playerUrl) {
       try {
         const fullPlayerUrl = this.fixUrl(playerUrl);
-        const playerRes = await http.get(fullPlayerUrl, { headers: { Referer: fullUrl } });
+        const playerRes = await this.http.get(fullPlayerUrl, { headers: { Referer: fullUrl } });
 
         const ctx = {
           window: {},
