@@ -1,9 +1,11 @@
 import { runTests } from './addon.test.js';
 import { runDomainRegistryTests } from './domain-registry.test.js';
+import { runNetworkSecurityTests } from './network-security.test.js';
 
 runTests()
-  .then((res) => {
+  .then(async (res) => {
     runDomainRegistryTests();
+    await runNetworkSecurityTests();
     if (res.failed > 0) process.exit(1);
     process.exit(0);
   })
