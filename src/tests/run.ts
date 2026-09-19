@@ -3,6 +3,7 @@ import { runDomainRegistryTests } from './domain-registry.test.js';
 import { runNetworkSecurityTests } from './network-security.test.js';
 import { runResponseSecurityTests } from './response-security.test.js';
 import { runProviderHealthTests } from './provider-health.test.js';
+import { runCacheCoalescingTests } from './cache-coalescing.test.js';
 
 runTests()
   .then(async (res) => {
@@ -10,6 +11,7 @@ runTests()
     await runNetworkSecurityTests();
     await runResponseSecurityTests();
     await runProviderHealthTests();
+    await runCacheCoalescingTests();
     if (res.failed > 0) process.exit(1);
     process.exit(0);
   })

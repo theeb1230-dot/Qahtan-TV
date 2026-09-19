@@ -1,6 +1,6 @@
 import { IProvider, ProviderDetail, ProviderItem, ResolvedStream } from '../types/provider.js';
 import { StremioContentType } from '../types/stremio.js';
-import { globalCache } from '../utils/cache.js';
+import { globalCache, globalInFlight } from '../utils/cache.js';
 import { Logger } from '../utils/logger.js';
 import { providerHealthManager } from '../domains/health.js';
 
@@ -54,7 +54,7 @@ export abstract class BaseProvider implements IProvider {
 
     try {
       this.logger.debug(`Searching for query: ${query}`);
-      const results = await this.searchInternal(query);
+      const results = await globalInFlight.run(cacheKey, () => this.searchInternal(query));
       if (results && results.length > 0) globalCache.set(cacheKey, results, 180);
       return results;
     } catch (err) {
@@ -70,7 +70,7 @@ export abstract class BaseProvider implements IProvider {
     if (cached) return cached;
     try {
       this.logger.debug(`Fetching catalog type=${type} page=${page}`);
-      const results = await this.getCatalogInternal(type, page);
+      const results = await globalInFlight.run(cacheKey, () => this.getCatalogInternal(type, page));
       if (results && results.length > 0) globalCache.set(cacheKey, results, 300);
       return results;
     } catch (err) {
@@ -86,7 +86,7 @@ export abstract class BaseProvider implements IProvider {
     if (cached) return cached;
     try {
       this.logger.debug(`Fetching meta for ${rawId} (${type})`);
-      const meta = await this.getMetaInternal(rawId, type);
+      const meta = await globalInFlight.run(cacheKey, () => this.getMetaInternal(rawId, type));
       if (meta) globalCache.set(cacheKey, meta, 600);
       return meta;
     } catch (err) {
@@ -103,7 +103,7 @@ export abstract class BaseProvider implements IProvider {
     if (cached) return cached;
     try {
       this.logger.debug(`Resolving streams for ${rawContentId} ep=${rawEpisodeId || 'none'}`);
-      const streams = await this.getStreamsInternal(rawContentId, type, rawEpisodeId);
+      const streams = await globalInFlight.run(cacheKey, () => this.getStreamsInternal(rawContentId, type, rawEpisodeId));
       if (streams.length > 0) globalCache.set(cacheKey, streams, 180);
       return streams;
     } catch (err) {
