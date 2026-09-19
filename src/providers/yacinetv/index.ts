@@ -1,10 +1,11 @@
 import { BaseProvider } from '../base.js';
 import { ProviderDetail, ProviderItem, ResolvedStream } from '../../types/provider.js';
 import { StremioContentType } from '../../types/stremio.js';
-import { http } from '../../utils/http.js';
+import { HttpClient } from '../../utils/this.http.js';
 import { decryptYacine } from '../../utils/crypto.js';
 
 export class YacineTVProvider extends BaseProvider {
+  private readonly http = new HttpClient();
   id = 'yacinetv';
   name = 'Yacine TV (بث مباشر)';
   lang = 'ar';
@@ -22,7 +23,7 @@ export class YacineTVProvider extends BaseProvider {
     for (const baseUrl of urls) {
       try {
         const fullUrl = `${baseUrl}/${path}`.replace(/([^:]\/)\/+/g, '$1');
-        const resp = await http.get(fullUrl, {
+        const resp = await this.http.get(fullUrl, {
           headers: {
             'User-Agent': 'okhttp/4.12.0',
           },
