@@ -1,61 +1,54 @@
 # Autonomous Development State
 
 ## Current cycle
-- Baseline main before feature branch: `781e6875bfcfd783cc807d02cdb9e3d46c798243`
-- Active branch / PR: `qahtan/domain-registry-foundation` / #1
-- Source baseline: 3rb exact SHA `d27b00f1894a63f86786ff04939d3c76b58f6677`
+- Exact main SHA verified at cycle start: `425002f1debb1ec556b4b7ad5c4497f39fbf1f55`.
+- Active branch: `qahtan/state-sync-provider-health-next`.
+- No open PR existed at cycle start.
+- Source baseline: 3rb exact SHA `d27b00f1894a63f86786ff04939d3c76b58f6677`.
 - Reuse permission: project owner explicitly allowed use, copying, modification and republication within Qahtan TV. Third-party notices remain independently applicable.
 
-## Latest verified GitHub state
-- main SHA: `781e6875bfcfd783cc807d02cdb9e3d46c798243`
-- CI run #10 succeeded on exact PR head `9ca8911637fbbac5a60ce84a2fa950e462546027` before the SyriaLive isolation commit.
-- Current code head before this state update: `9b8080ea92c99d98e1aface6ef459606f5fbfdcd`; its CI must pass before merge.
-- No release exists yet.
+## Completed and merged
+- Qahtan TV identity migration foundation and centralized DomainRegistry.
+- User baseline domains are separated from parsers; unverified domains are not promoted merely because they return HTTP 200.
+- SyriaLive/Yacine false duplication was removed. SyriaLive remains fail-closed until an independent contract is verified.
+- `https://zx33.tuktuk-sa.online` remains quarantined as an unverified candidate, with no Working claim or automatic provider binding.
+- Cookie jars are isolated with domain/path/expiry semantics.
+- Central SSRF validation rejects private, loopback, link-local, metadata/reserved destinations, unsafe schemes, URL credentials and mapped-address bypasses.
+- DNS-rebinding/TOCTOU hardening pins outbound connections to validated public IPs while preserving Host/TLS identity and revalidates every redirect hop.
+- Stream proxy preserves streaming/backpressure and Range semantics and has bounded concurrency plus per-client rate limiting.
+- Development debug-fetch is disabled in production and now uses bounded response buffering instead of unbounded `Response.text()`.
+- Dedicated network and bounded-response security contract tests are wired into the test runner.
 
-## Completed
-- Imported the authorized source tree and began Qahtan TV identity migration.
-- Added centralized 10-provider DomainRegistry from the user-verified 2026-09-19 baseline.
-- Website-backed providers consume the registry baseline; Yacine website identity remains separate from its API endpoint.
-- Added identity-gated last-known-good promotion, per-domain latency/failure/last-success observations, adaptive ordering and bounded circuit-breaker cooldown.
-- Hardened the backend baseline: public HTTP(S) destination validation, private/reserved destination blocking, redirect validation, production debug-fetch disabled, bounded request bodies/timeouts, environment PORT, production CORS allowlist, streaming proxy/backpressure and Range header propagation.
-- Removed the inherited false SyriaLive/Yacine duplication. SyriaLive no longer calls `def.ycnapi.com`, imports `decryptYacine`, or emits Yacine-derived events/streams. It now fails closed until an independent SyriaLive contract is verified.
+## Current exact-main evidence
+- Main merge commit: `425002f1debb1ec556b4b7ad5c4497f39fbf1f55` (PR #8).
+- PR #8 exact head `e78bde207fd8b3aba0485e2ef1011fb4273a2f03` passed its required CI before merge.
+- No release is claimed ready.
 
 ## Provider/domain baseline
-Akwam: akwam.ss/one
-Yacine TV website: yacinee-tv.net (API separately verified before changes)
-Syria Live: mewsry.live
-WeCima: wecima.cx
-FaselHD: fasel-hd.com -> fasellhd.rest/main
-ArabSeed: arabseed.wine/home/
-Anime4Up: w1.anime4up.rest/home8/
-WitAnime: witanime.you -> ristoanime.me
-3isk: 3iskk.xyz -> e.3cktv.com
-EgyDead: tv10.egydead.live/h3/
+- Akwam: `https://akwam.ss/one`
+- Yacine TV website: `https://yacinee-tv.net` (API remains separate)
+- Syria Live: `https://www.mewsry.live`
+- WeCima: `https://wecima.cx`
+- FaselHD: `https://www.fasel-hd.com` -> `https://fasellhd.rest/main`
+- ArabSeed: `https://www.arabseed.wine/home/`
+- Anime4Up: `https://w1.anime4up.rest/home8/`
+- WitAnime: `https://witanime.you` -> `https://ristoanime.me`
+- 3isk: `https://3iskk.xyz` -> `https://e.3cktv.com`
+- EgyDead: `https://tv10.egydead.live/h3/`
+- Unverified candidate: `https://zx33.tuktuk-sa.online`
 
 ## Provider evidence
-- SyriaLive: Broken/degraded by design pending independent parser verification. The previous implementation was invalid because it was Yacine under a second name; that coupling is removed rather than reported as success.
-- Other providers: no provider is yet claimed Working end-to-end in this development state. Parser existence or HTTP reachability is not sufficient evidence.
+- SyriaLive: Broken/degraded by design pending independent parser verification; the invalid Yacine alias was removed.
+- tuktuk candidate: Unknown/quarantined. Identity and content contract are not established.
+- All other providers: no provider is yet claimed Working end-to-end solely from parser presence or reachability. Working requires discovery/catalog -> metadata/details -> episodes where applicable -> stream resolution evidence.
 
 ## Remaining release blockers
-- Current-head CI after SyriaLive isolation.
-- Independent SyriaLive website contract/parser verification.
-- Active domain identity probes/identity fingerprints.
-- Dedicated SSRF/DNS-rebinding/proxy security tests; stronger rebinding-resistant connection policy remains P0.
-- Cookie jar domain/path/expiry isolation, bounded retries/backoff/concurrency/rate/response-size controls.
-- Provider health integration and real end-to-end evidence through stream resolution for each usable provider.
-- Complete identity/license/TODO/dead-code audit and release gate review.
+- Provider health manager integration: failure counters, circuit breaker, cooldown, last-success, latency and adaptive ranking/fallback.
+- Active identity probes that validate expected provider fingerprints/parser prerequisites before promoting lastKnownGood.
+- Real end-to-end provider contract evidence through stream resolution for every provider claimed usable.
+- Independent SyriaLive contract/parser verification.
+- Identity/license/TODO/FIXME/dead-code audit and final release-gate review.
+- CI must be green on the eventual exact release SHA; no P0/P1 may be hidden behind a successful build.
 
-## Next
-Require green CI on the exact current PR head, then continue P0 backend security and active domain health verification. Keep SyriaLive visibly degraded until its own independently verified contract exists; never restore the Yacine alias as a shortcut.
-
-## 2026-09-19 tuktuk candidate cycle
-- Exact failing PR head inspected: `27d7bda6f852976ce9d3178ccbfbae02df1355bb`; CI run #12 failed only in domain-registry contract tests after the intentional SyriaLive separation. Lint passed.
-- Fixed stale SyriaLive assertion: SyriaLive is expected to use `https://www.mewsry.live` and must differ from Yacine's API endpoint.
-- Added `https://zx33.tuktuk-sa.online` as quarantined `tuktuk_candidate` with `lastKnownGood=null`, `health=unknown`, and no identity hints. It is not registered as a content Provider and cannot be selected as Working.
-- Public lookup/fetch from the available environment did not establish the candidate's identity or functional contract, so promotion is deliberately blocked.
-- Added tests enforcing the candidate remains fail-closed until identity verification.
-
-## 2026-09-19 PR #1 gate
-- CI run #16 succeeded on exact PR head `70727d3fc100b357959d82c060509855701bf0d9` with lint, tests and production build green.
-- PR #1 is mergeable and contains the completed foundation/security/domain-registry slice.
-- This does not satisfy v1.0: active provider identity probes, end-to-end provider evidence, stronger proxy/DNS tests, cookie isolation and operational limits remain release blockers.
+## Next implementation slice
+Implement provider health/circuit-breaker state as a reusable layer around DomainRegistry selection, with deterministic contract tests. Do not couple it to a single title or provider. Preserve quarantined candidate behavior and never promote a candidate without identity verification.
