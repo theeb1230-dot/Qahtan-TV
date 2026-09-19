@@ -19,10 +19,10 @@ export class ThreeIskProvider extends BaseProvider {
     this.initLogger();
   }
 
-  private fixUrl(url?: string): string {
+  private fixUrl(url?: string, baseUrl = this.mainUrl): string {
     if (!url) return '';
     if (url.startsWith('//')) return `https:${url}`;
-    if (!url.startsWith('http')) return `${this.mainUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+    if (!url.startsWith('http')) return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
     return url;
   }
 
@@ -40,30 +40,35 @@ export class ThreeIskProvider extends BaseProvider {
   }
 
   async searchInternal(query: string): Promise<ProviderItem[]> {
-    const url = `${this.mainUrl}/search.php?keywords=${encodeURIComponent(query)}`;
-    const resp = await this.http.get(url);
-
-    const items: ProviderItem[] = [];
-    resp.$('div.post-item, div.block-post, div.video-item').each((_, el) => {
-      const a = resp.$(el).find('a').first();
-      const title = resp.$(el).find('.post-title, .title').text().trim() || a.attr('title') || '';
-      const href = this.extractItemUrl(el, resp.$);
-      if (!title || !href) return;
-
-      const poster = this.fixUrl(resp.$(el).find('img').attr('data-src') || resp.$(el).find('img').attr('src'));
-      const isMovie = href.includes('/movie/') || title.includes('فيلم');
-
-      items.push({
-        id: this.formatId(href.replace(this.mainUrl, '')),
-        provider: this.name,
-        type: isMovie ? 'movie' : 'series',
-        title,
-        poster,
-        url: href,
+    return this.withHealthyDomain(async (baseUrl) => {
+      const url = `${baseUrl}/search.php?keywords=${encodeURIComponent(query)}`;
+      const resp = await this.http.get(url);
+  
+      const items: ProviderItem[] = [];
+      resp.$('div.post-item, div.block-post, div.video-item').each((_, el) => {
+        const a = resp.$(el).find('a').first();
+        const title = resp.$(el).find('.post-title, .title').text().trim() || a.attr('title') || '';
+        const href = this.extractItemUrl(el, resp.$);
+        if (!title || !href) return;
+  
+        const poster = this.fixUrl(resp.$(el).find('img').attr('data-src') || resp.$(el).find('img').attr('src'), baseUrl);
+        const isMovie = href.includes('/movie/') || title.includes('فيلم');
+  
+        items.push({
+          id: this.formatId(href.replace(baseUrl, '')),
+          provider: this.name,
+          type: isMovie ? 'movie' : 'series',
+          title,
+          poster,
+          url: href,
+        });
       });
+  
+      return items;
+    }
+      const identityVerified = items.length > 0;
+      return { value: items, identityVerified };
     });
-
-    return items;
   }
 
   async getCatalogInternal(type: StremioContentType, page: number = 1): Promise<ProviderItem[]> {
