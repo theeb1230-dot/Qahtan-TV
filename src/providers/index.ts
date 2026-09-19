@@ -11,6 +11,7 @@ import { WitAnimeProvider } from './witanime/index.js';
 import { ThreeIskProvider } from './3isk/index.js';
 import { EgydeadProvider } from './egydead/index.js';
 import { Logger } from '../utils/logger.js';
+import { domainRegistry } from '../domains/registry.js';
 
 const logger = new Logger('ProviderRegistry');
 
@@ -31,6 +32,14 @@ export class ProviderRegistry {
   }
 
   register(provider: IProvider) {
+    // Website-backed providers consume their active base URL from the central
+    // domain registry. API-backed live providers keep a separate API endpoint.
+    if (provider.id !== 'yacinetv' && provider.id !== 'syrialive') {
+      const domain = domainRegistry.get(provider.id);
+      if (domain?.lastKnownGood || domain?.primary) {
+        provider.mainUrl = domain.lastKnownGood || domain.primary;
+      }
+    }
     this.providers.set(provider.id, provider);
   }
 

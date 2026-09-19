@@ -2,220 +2,129 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import path from 'path';
 import dns from 'node:dns';
+import net from 'node:net';
+import { Readable } from 'node:stream';
 import { createServer as createViteServer } from 'vite';
 import { stremioRouter } from './src/addon/router.js';
 import { registry } from './src/providers/index.js';
 import { StremioContentType } from './src/types/stremio.js';
 import { Logger } from './src/utils/logger.js';
 
-// Ensure IPv4 is resolved first to avoid cloud environment (Render/Docker) IPv6 hanging
-try {
-  dns.setDefaultResultOrder('ipv4first');
-} catch {
-  // Ignore if not supported
-}
+try { dns.setDefaultResultOrder('ipv4first'); } catch {}
 
 const logger = new Logger('Server');
-const PORT = 3000;
+const PORT = Number.parseInt(process.env.PORT || '3000', 10);
+const isProduction = process.env.NODE_ENV === 'production';
+const allowedOrigins = (process.env.CORS_ORIGINS || '').split(',').map(v => v.trim()).filter(Boolean);
+
+function isForbiddenIp(address: string): boolean {
+  const ip = address.toLowerCase().split('%')[0];
+  if (net.isIPv4(ip)) {
+    const p = ip.split('.').map(Number);
+    return p[0] === 10 || p[0] === 127 || p[0] === 0 ||
+      (p[0] === 169 && p[1] === 254) || (p[0] === 172 && p[1] >= 16 && p[1] <= 31) ||
+      (p[0] === 192 && p[1] === 168) || (p[0] === 100 && p[1] >= 64 && p[1] <= 127) ||
+      p[0] >= 224;
+  }
+  if (net.isIPv6(ip)) {
+    return ip === '::1' || ip === '::' || ip.startsWith('fc') || ip.startsWith('fd') ||
+      ip.startsWith('fe8') || ip.startsWith('fe9') || ip.startsWith('fea') || ip.startsWith('feb') ||
+      ip.startsWith('ff') || ip.startsWith('::ffff:127.') || ip.startsWith('::ffff:10.') ||
+      ip.startsWith('::ffff:192.168.');
+  }
+  return true;
+}
+
+async function assertSafePublicUrl(raw: string): Promise<URL> {
+  const url = new URL(raw);
+  if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Only HTTP(S) URLs are allowed');
+  if (url.username || url.password) throw new Error('URL credentials are not allowed');
+  if (url.hostname === 'localhost' || url.hostname.endsWith('.localhost')) throw new Error('Local destinations are blocked');
+  const resolved = await dns.promises.lookup(url.hostname, { all: true, verbatim: true });
+  if (!resolved.length || resolved.some(r => isForbiddenIp(r.address))) throw new Error('Private or reserved destination is blocked');
+  return url;
+}
+
+async function safeFetch(raw: string, init: RequestInit, maxRedirects = 3): Promise<globalThis.Response> {
+  let current = (await assertSafePublicUrl(raw)).toString();
+  for (let i = 0; i <= maxRedirects; i++) {
+    await assertSafePublicUrl(current);
+    const response = await fetch(current, { ...init, redirect: 'manual' });
+    if (![301,302,303,307,308].includes(response.status)) return response;
+    if (i === maxRedirects) throw new Error('Too many redirects');
+    const location = response.headers.get('location');
+    if (!location) throw new Error('Redirect missing location');
+    current = new URL(location, current).toString();
+  }
+  throw new Error('Redirect validation failed');
+}
 
 async function startServer() {
   const app = express();
+  app.disable('x-powered-by');
+  app.use(cors({
+    origin(origin, cb) {
+      if (!origin || !isProduction || allowedOrigins.includes(origin)) return cb(null, true);
+      cb(new Error('Origin not allowed'));
+    },
+  }));
+  app.use(express.json({ limit: '256kb' }));
+  app.use(express.urlencoded({ extended: true, limit: '256kb' }));
 
-  app.use(cors());
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+  app.get('/api/health', (_req, res) => res.json({ status:'ok', providersCount:registry.getAllProviders().length, uptime:process.uptime() }));
 
-  // Request logging
-  app.use((req, _res, next) => {
-    if (!req.url.startsWith('/@') && !req.url.startsWith('/src') && !req.url.startsWith('/node_modules')) {
-      logger.debug(`${req.method} ${req.url}`);
-    }
-    next();
-  });
-
-  // Health check
-  app.get('/api/health', (_req: Request, res: Response) => {
-    res.json({
-      status: 'ok',
-      providersCount: registry.getAllProviders().length,
-      uptime: process.uptime(),
-    });
-  });
-
-  // Stream proxy endpoint (to allow Stremio web and browser preview player to bypass CORS / hotlink protection)
   app.get('/api/stream-proxy', async (req: Request, res: Response) => {
-    const streamUrl = req.query.url as string;
-    const referer = req.query.referer as string;
-    const origin = req.query.origin as string;
-    const userAgent = req.query.userAgent as string;
-
-    if (!streamUrl) {
-      return res.status(400).send('Missing url parameter');
-    }
-
+    const streamUrl = String(req.query.url || '');
+    if (!streamUrl) return res.status(400).send('Missing url parameter');
     try {
-      const headers: Record<string, string> = {
-        'User-Agent':
-          userAgent ||
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      const headers: Record<string,string> = {
+        'User-Agent': String(req.query.userAgent || 'Mozilla/5.0 QahtanTV/0.1'),
+        Accept: '*/*',
       };
-      if (referer) headers['Referer'] = referer;
-      if (origin) headers['Origin'] = origin;
+      if (req.headers.range) headers.Range = req.headers.range;
+      if (req.query.referer) headers.Referer = String(req.query.referer);
+      if (req.query.origin) headers.Origin = String(req.query.origin);
 
-      const upstream = await fetch(streamUrl, {
-        headers,
-        redirect: 'follow',
-      });
-
-      const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
-      res.setHeader('Content-Type', contentType);
-      res.setHeader('Access-Control-Allow-Origin', '*');
-
-      const arrayBuffer = await upstream.arrayBuffer();
-      res.send(Buffer.from(arrayBuffer));
-    } catch (err) {
-      logger.error(`Proxy stream error for ${streamUrl}: ${(err as Error).message}`);
-      res.status(500).send(`Failed to proxy stream: ${(err as Error).message}`);
-    }
-  });
-
-  // Provider API for Web Dashboard & diagnostics
-  app.get('/api/providers', (_req: Request, res: Response) => {
-    const list = registry.getAllProviders().map((p) => ({
-      id: p.id,
-      name: p.name,
-      lang: p.lang,
-      mainUrl: p.mainUrl,
-      supportedTypes: p.supportedTypes,
-    }));
-    res.json({ providers: list });
-  });
-
-  app.get('/api/search', async (req: Request, res: Response) => {
-    const q = (req.query.q as string) || '';
-    const providerId = req.query.provider as string;
-
-    if (!q) return res.json({ results: [] });
-
-    try {
-      if (providerId) {
-        const p = registry.getProvider(providerId);
-        if (!p) return res.status(404).json({ error: 'Provider not found' });
-        const items = await p.search(q);
-        return res.json({ results: items });
+      const upstream = await safeFetch(streamUrl, { headers, signal: AbortSignal.timeout(15_000) });
+      res.status(upstream.status);
+      for (const h of ['content-type','content-length','content-range','accept-ranges','cache-control','etag','last-modified']) {
+        const v = upstream.headers.get(h); if (v) res.setHeader(h, v);
       }
-
-      const items = await registry.searchAll(q);
-      res.json({ results: items });
+      if (!upstream.body) return res.end();
+      Readable.fromWeb(upstream.body as any).on('error', err => res.destroy(err as Error)).pipe(res);
     } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
+      logger.error('Stream proxy request failed', err);
+      res.status(502).send('Failed to proxy stream');
     }
   });
 
-  app.get('/api/catalog', async (req: Request, res: Response) => {
-    const type = (req.query.type as StremioContentType) || 'movie';
-    const providerId = req.query.provider as string;
-    const page = parseInt((req.query.page as string) || '1', 10);
+  app.get('/api/providers', (_req, res) => res.json({ providers: registry.getAllProviders().map(p => ({id:p.id,name:p.name,lang:p.lang,mainUrl:p.mainUrl,supportedTypes:p.supportedTypes})) }));
 
-    try {
-      if (providerId) {
-        const p = registry.getProvider(providerId);
-        if (!p) return res.status(404).json({ error: 'Provider not found' });
-        const items = await p.getCatalog(type, page);
-        return res.json({ results: items });
-      }
-
-      const items = await registry.getCatalog(type, page);
-      res.json({ results: items });
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
+  app.get('/api/search', async (req,res) => {
+    const q=String(req.query.q||''); const providerId=req.query.provider as string;
+    if(!q) return res.json({results:[]});
+    try { if(providerId){const p=registry.getProvider(providerId); if(!p)return res.status(404).json({error:'Provider not found'}); return res.json({results:await p.search(q)});}
+      res.json({results:await registry.searchAll(q)}); } catch(err){res.status(500).json({error:(err as Error).message});}
   });
-
-  app.get('/api/meta', async (req: Request, res: Response) => {
-    const id = req.query.id as string;
-    const type = (req.query.type as StremioContentType) || 'movie';
-
-    if (!id) return res.status(400).json({ error: 'Missing id parameter' });
-
-    try {
-      const meta = await registry.getMeta(id, type);
-      res.json({ meta });
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
+  app.get('/api/catalog', async (req,res) => {
+    const type=(req.query.type as StremioContentType)||'movie'; const providerId=req.query.provider as string; const page=parseInt(String(req.query.page||'1'),10);
+    try { if(providerId){const p=registry.getProvider(providerId);if(!p)return res.status(404).json({error:'Provider not found'});return res.json({results:await p.getCatalog(type,page)});}
+      res.json({results:await registry.getCatalog(type,page)}); }catch(err){res.status(500).json({error:(err as Error).message});}
   });
+  app.get('/api/meta',async(req,res)=>{const id=req.query.id as string;const type=(req.query.type as StremioContentType)||'movie';if(!id)return res.status(400).json({error:'Missing id parameter'});try{res.json({meta:await registry.getMeta(id,type)});}catch(err){res.status(500).json({error:(err as Error).message});}});
+  app.get('/api/streams',async(req,res)=>{const id=req.query.id as string;const type=(req.query.type as StremioContentType)||'movie';if(!id)return res.status(400).json({error:'Missing id parameter'});try{res.json({streams:await registry.getStreams(id,type,req.query.episodeId as string|undefined)});}catch(err){res.status(500).json({error:(err as Error).message});}});
 
-  app.get('/api/streams', async (req: Request, res: Response) => {
-    const id = req.query.id as string;
-    const type = (req.query.type as StremioContentType) || 'movie';
-    const episodeId = req.query.episodeId as string | undefined;
-
-    if (!id) return res.status(400).json({ error: 'Missing id parameter' });
-
-    try {
-      const streams = await registry.getStreams(id, type, episodeId);
-      res.json({ streams });
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
-  });
-
-  // Diagnostic endpoint to check upstream provider connectivity from host
-  app.get('/api/debug-fetch', async (req: Request, res: Response) => {
-    const targetUrl = req.query.url as string;
-    if (!targetUrl) return res.status(400).json({ error: 'Missing url query parameter' });
-
-    try {
-      const resp = await fetch(targetUrl, {
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        },
-      });
-      const text = await resp.text();
-      res.json({
-        url: targetUrl,
-        status: resp.status,
-        statusText: resp.statusText,
-        headers: Object.fromEntries(resp.headers.entries()),
-        preview: text.slice(0, 500),
-      });
-    } catch (err) {
-      res.status(500).json({
-        url: targetUrl,
-        error: (err as Error).message,
-      });
-    }
-  });
-
-  // Stremio Addon Protocol Routes
-  app.use('/', stremioRouter);
-
-  // Vite middleware for development vs static build for production
-  if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    // Serve static files with proper MIME types
-    app.use(express.static(distPath, { index: false }));
-    // Serve index.html for root and any non-API client routes
-    app.get('*', (_req: Request, res: Response) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+  if (!isProduction) {
+    app.get('/api/debug-fetch', async (req,res) => {
+      const target=String(req.query.url||''); if(!target)return res.status(400).json({error:'Missing url query parameter'});
+      try { const upstream=await safeFetch(target,{headers:{'User-Agent':'Mozilla/5.0 QahtanTV/0.1'},signal:AbortSignal.timeout(10_000)}); const body=await upstream.text(); res.json({url:upstream.url,status:upstream.status,preview:body.slice(0,500)});}
+      catch(err){res.status(502).json({error:(err as Error).message});}
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    logger.info(`Re-3arabi Stremio Addon Server running on http://0.0.0.0:${PORT}`);
-    logger.info(`Stremio Manifest URL: http://0.0.0.0:${PORT}/manifest.json`);
-  });
+  app.use('/',stremioRouter);
+  if(!isProduction){const vite=await createViteServer({server:{middlewareMode:true},appType:'spa'});app.use(vite.middlewares);}
+  else {const dist=path.join(process.cwd(),'dist');app.use(express.static(dist,{index:false}));app.get('*',(_req,res)=>res.sendFile(path.join(dist,'index.html')));}
+  app.listen(PORT,'0.0.0.0',()=>logger.info(`Qahtan TV server listening on port ${PORT}`));
 }
-
-startServer().catch((err) => {
-  logger.error(`Fatal server startup error: ${err.message}`, err);
-});
+startServer().catch(err=>logger.error(`Fatal server startup error: ${err.message}`,err));
