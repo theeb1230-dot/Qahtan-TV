@@ -1,7 +1,7 @@
 import { BaseProvider } from '../base.js';
 import { ProviderDetail, ProviderEpisode, ProviderItem, ResolvedStream } from '../../types/provider.js';
 import { StremioContentType } from '../../types/stremio.js';
-import { HttpClient } from '../../utils/this.http.js';
+import { HttpClient } from '../../utils/http.js';
 import { extractStreams } from '../../extractors/index.js';
 
 export class AkwamProvider extends BaseProvider {
