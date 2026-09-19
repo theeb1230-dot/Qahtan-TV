@@ -32,7 +32,7 @@ export const MOBILE_USER_AGENT =
 
 export class HttpClient {
   private defaultHeaders: Record<string, string>;
-  private cookieJar: Map<string, string> = new Map();
+  private cookieJar: Array<{ name: string; value: string; domain: string; path: string; expiresAt?: number; secure: boolean; hostOnly: boolean }> = [];
 
   constructor(defaultHeaders: Record<string, string> = {}) {
     this.defaultHeaders = {
@@ -43,16 +43,70 @@ export class HttpClient {
     };
   }
 
-  setCookie(key: string, value: string) {
-    this.cookieJar.set(key, value);
+  setCookie(key: string, value: string, url = 'https://localhost/') {
+    const target = new URL(url);
+    this.storeCookie(key, value, target.hostname, '/', undefined, target.protocol === 'https:', true);
   }
 
-  getCookieString(): string {
-    const parts: string[] = [];
-    this.cookieJar.forEach((val, key) => {
-      parts.push(`${key}=${val}`);
-    });
-    return parts.join('; ');
+  getCookieString(url = 'https://localhost/'): string {
+    const target = new URL(url);
+    const now = Date.now();
+    this.cookieJar = this.cookieJar.filter((cookie) => !cookie.expiresAt || cookie.expiresAt > now);
+    return this.cookieJar
+      .filter((cookie) => {
+        const domainMatch = cookie.hostOnly
+          ? target.hostname === cookie.domain
+          : target.hostname === cookie.domain || target.hostname.endsWith(`.${cookie.domain}`);
+        const pathMatch = target.pathname.startsWith(cookie.path);
+        const secureMatch = !cookie.secure || target.protocol === 'https:';
+        return domainMatch && pathMatch && secureMatch;
+      })
+      .map((cookie) => `${cookie.name}=${cookie.value}`)
+      .join('; ');
+  }
+
+  private storeCookie(name: string, value: string, domain: string, path: string, expiresAt?: number, secure = false, hostOnly = true) {
+    const normalizedDomain = domain.toLowerCase().replace(/^\\./, '');
+    this.cookieJar = this.cookieJar.filter((cookie) =>
+      !(cookie.name === name && cookie.domain === normalizedDomain && cookie.path === path)
+    );
+    if (expiresAt && expiresAt <= Date.now()) return;
+    this.cookieJar.push({ name, value, domain: normalizedDomain, path, expiresAt, secure, hostOnly });
+  }
+
+  private captureSetCookie(raw: string, responseUrl: string) {
+    const target = new URL(responseUrl);
+    const parts = raw.split(';').map((part) => part.trim());
+    const first = parts.shift();
+    if (!first) return;
+    const separator = first.indexOf('=');
+    if (separator <= 0) return;
+    const name = first.slice(0, separator).trim();
+    const value = first.slice(separator + 1).trim();
+    let domain = target.hostname;
+    let path = '/';
+    let expiresAt: number | undefined;
+    let secure = false;
+    let hostOnly = true;
+    for (const attr of parts) {
+      const [rawKey, ...rest] = attr.split('=');
+      const key = rawKey.toLowerCase();
+      const attrValue = rest.join('=').trim();
+      if (key === 'domain' && attrValue) {
+        const candidate = attrValue.toLowerCase().replace(/^\\./, '');
+        if (target.hostname !== candidate && !target.hostname.endsWith(`.${candidate}`)) return;
+        domain = candidate;
+        hostOnly = false;
+      } else if (key === 'path' && attrValue.startsWith('/')) path = attrValue;
+      else if (key === 'expires' && attrValue) {
+        const parsed = Date.parse(attrValue);
+        if (!Number.isNaN(parsed)) expiresAt = parsed;
+      } else if (key === 'max-age' && attrValue) {
+        const seconds = Number(attrValue);
+        if (Number.isFinite(seconds)) expiresAt = Date.now() + seconds * 1000;
+      } else if (key === 'secure') secure = true;
+    }
+    this.storeCookie(name, value, domain, path, expiresAt, secure, hostOnly);
   }
 
   async request<T = any>(url: string, options: HttpRequestOptions = {}): Promise<HttpResponse<T>> {
@@ -69,7 +123,7 @@ export class HttpClient {
       headers['Referer'] = options.referer;
     }
 
-    const cookieHeader = [this.getCookieString(), options.cookies].filter(Boolean).join('; ');
+    const cookieHeader = [this.getCookieString(url), options.cookies].filter(Boolean).join('; ');
     if (cookieHeader) {
       headers['Cookie'] = cookieHeader;
     }
@@ -108,17 +162,10 @@ export class HttpClient {
       });
 
       // Track set-cookie
-      const setCookie = resp.headers.get('set-cookie');
-      if (setCookie) {
-        const matches = setCookie.matchAll(/([^=;]+)=([^;]+)/g);
-        for (const match of matches) {
-          const k = match[1]?.trim();
-          const v = match[2]?.trim();
-          if (k && v && !['path', 'expires', 'domain', 'samesite', 'secure', 'httponly'].includes(k.toLowerCase())) {
-            this.cookieJar.set(k, v);
-          }
-        }
-      }
+      const setCookies = typeof resp.headers.getSetCookie === 'function'
+        ? resp.headers.getSetCookie()
+        : [resp.headers.get('set-cookie')].filter((value): value is string => Boolean(value));
+      for (const setCookie of setCookies) this.captureSetCookie(setCookie, resp.url);
 
       const text = await resp.text();
 
