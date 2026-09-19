@@ -9,6 +9,7 @@ import { registry } from './src/providers/index.js';
 import { StremioContentType } from './src/types/stremio.js';
 import { Logger } from './src/utils/logger.js';
 import { safeFetch } from './src/security/network.js';
+import { readBoundedTextPreview } from './src/security/response.js';
 
 try { dns.setDefaultResultOrder('ipv4first'); } catch {}
 
@@ -19,6 +20,7 @@ const allowedOrigins = (process.env.CORS_ORIGINS || '').split(',').map(v => v.tr
 const STREAM_PROXY_MAX_CONCURRENT = Math.max(1, Number.parseInt(process.env.STREAM_PROXY_MAX_CONCURRENT || '24', 10) || 24);
 const STREAM_PROXY_RATE_WINDOW_MS = Math.max(1_000, Number.parseInt(process.env.STREAM_PROXY_RATE_WINDOW_MS || '60000', 10) || 60_000);
 const STREAM_PROXY_RATE_MAX = Math.max(1, Number.parseInt(process.env.STREAM_PROXY_RATE_MAX || '120', 10) || 120);
+const DEBUG_FETCH_PREVIEW_MAX_BYTES = Math.min(256 * 1024, Math.max(1024, Number.parseInt(process.env.DEBUG_FETCH_PREVIEW_MAX_BYTES || '65536', 10) || 65536));
 let activeProxyRequests = 0;
 const proxyRate = new Map<string, { count: number; resetAt: number }>();
 
@@ -102,8 +104,11 @@ async function startServer() {
   if (!isProduction) {
     app.get('/api/debug-fetch', async (req,res) => {
       const target=String(req.query.url||''); if(!target)return res.status(400).json({error:'Missing url query parameter'});
-      try { const upstream=await safeFetch(target,{headers:{'User-Agent':'Mozilla/5.0 QahtanTV/0.1'},signal:AbortSignal.timeout(10_000)}); const body=await upstream.text(); res.json({url:upstream.url,status:upstream.status,preview:body.slice(0,500)});}
-      catch(err){res.status(502).json({error:(err as Error).message});}
+      try {
+        const upstream=await safeFetch(target,{headers:{'User-Agent':'Mozilla/5.0 QahtanTV/0.1'},signal:AbortSignal.timeout(10_000)});
+        const { preview, truncated } = await readBoundedTextPreview(upstream, DEBUG_FETCH_PREVIEW_MAX_BYTES);
+        res.json({url:upstream.url,status:upstream.status,preview,truncated,previewBytesLimit:DEBUG_FETCH_PREVIEW_MAX_BYTES});
+      } catch(err){res.status(502).json({error:(err as Error).message});}
     });
   }
 
