@@ -1,7 +1,7 @@
 import { BaseProvider } from '../base.js';
 import { ProviderDetail, ProviderEpisode, ProviderItem, ResolvedStream } from '../../types/provider.js';
 import { StremioContentType } from '../../types/stremio.js';
-import { HttpClient } from '../../utils/this.http.js';
+import { HttpClient } from '../../utils/http.js';
 import { safeBase64Decode } from '../../utils/crypto.js';
 import { unpackAll } from '../../utils/packer.js';
 import { extractStreams } from '../../extractors/index.js';
