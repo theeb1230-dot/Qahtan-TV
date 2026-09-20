@@ -21,6 +21,13 @@ export class AkwamProvider extends BaseProvider {
     return new URL(baseUrl).origin;
   }
 
+  /** Preserve the configured application prefix (currently /one) for discovery
+   * routes. Stripping to origin silently changed /one/search into /search and
+   * made a healthy domain look like a provider failure. */
+  private discoveryUrl(baseUrl: string, path: string): string {
+    return `${baseUrl.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`;
+  }
+
   private fixUrl(url?: string, baseUrl = this.mainUrl): string {
     if (!url) return '';
     if (url.startsWith('//')) return `https:${url}`;
@@ -62,7 +69,7 @@ export class AkwamProvider extends BaseProvider {
 
   async searchInternal(query: string): Promise<ProviderItem[]> {
     return this.withHealthyDomain(async (baseUrl) => {
-      const url = `${this.siteRoot(baseUrl)}/search?q=${encodeURIComponent(query)}`;
+      const url = this.discoveryUrl(baseUrl, `search?q=${encodeURIComponent(query)}`);
       const resp = await this.http.get(url);
       const items = this.parseListing(resp, baseUrl);
       return { value: items, identityVerified: items.length > 0 };
@@ -72,7 +79,7 @@ export class AkwamProvider extends BaseProvider {
   async getCatalogInternal(type: StremioContentType, page = 1): Promise<ProviderItem[]> {
     return this.withHealthyDomain(async (baseUrl) => {
       const path = type === 'series' ? 'series' : 'movies';
-      const url = `${this.siteRoot(baseUrl)}/${path}${page > 1 ? `?page=${page}` : ''}`;
+      const url = this.discoveryUrl(baseUrl, `${path}${page > 1 ? `?page=${page}` : ''}`);
       const resp = await this.http.get(url);
       const items = this.parseListing(resp, baseUrl, type);
       return { value: items, identityVerified: items.length > 0 };
