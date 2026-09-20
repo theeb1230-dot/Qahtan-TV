@@ -21,11 +21,10 @@ export class AkwamProvider extends BaseProvider {
     return new URL(baseUrl).origin;
   }
 
-  /** Preserve the configured application prefix (currently /one) for discovery
-   * routes. Stripping to origin silently changed /one/search into /search and
-   * made a healthy domain look like a provider failure. */
+  /** Akwam's /one URL is a verified landing route, while live discovery and
+   * content routes are rooted at the origin (/series, /movies, /search). */
   private discoveryUrl(baseUrl: string, path: string): string {
-    return `${baseUrl.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`;
+    return `${this.siteRoot(baseUrl)}/${path.replace(/^\/+/, '')}`;
   }
 
   private fixUrl(url?: string, baseUrl = this.mainUrl): string {
