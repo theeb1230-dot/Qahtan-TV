@@ -1,5 +1,6 @@
 import { BaseProvider } from '../base.js';
-import type { ProviderDetail, ProviderEpisode, ProviderItem, ResolvedStream, StremioContentType } from '../../types.js';
+import type { ProviderDetail, ProviderEpisode, ProviderItem, ResolvedStream } from '../../types/provider.js';
+import type { StremioContentType } from '../../types/stremio.js';
 
 export class WeCimaProvider extends BaseProvider {
   id = 'wecima';
