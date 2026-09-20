@@ -18,3 +18,5 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      - name: P0 runtime evidence - Akwam
+        run: npm run e2e:provider -- akwam "مسلسل"
