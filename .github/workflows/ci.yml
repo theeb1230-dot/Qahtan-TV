@@ -22,3 +22,5 @@ jobs:
         run: npm run e2e:provider -- akwam "مسلسل"
       - name: P0 runtime evidence - Yacine TV
         run: npm run e2e:provider -- yacinetv "رياضة"
+      - name: P0 runtime evidence - WeCima
+        run: npm run e2e:provider -- wecima "مسلسل"
