@@ -30,6 +30,14 @@ export const DEFAULT_USER_AGENT =
 export const MOBILE_USER_AGENT =
   'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
 
+function encodeUrlHeader(value: string): string {
+  try {
+    return encodeURI(value);
+  } catch {
+    return value;
+  }
+}
+
 export class HttpClient {
   private defaultHeaders: Record<string, string>;
   private cookieJar: Array<{ name: string; value: string; domain: string; path: string; expiresAt?: number; secure: boolean; hostOnly: boolean }> = [];
@@ -66,7 +74,7 @@ export class HttpClient {
   }
 
   private storeCookie(name: string, value: string, domain: string, path: string, expiresAt?: number, secure = false, hostOnly = true) {
-    const normalizedDomain = domain.toLowerCase().replace(/^\\./, '');
+    const normalizedDomain = domain.toLowerCase().replace(/^\./, '');
     this.cookieJar = this.cookieJar.filter((cookie) =>
       !(cookie.name === name && cookie.domain === normalizedDomain && cookie.path === path)
     );
@@ -93,7 +101,7 @@ export class HttpClient {
       const key = rawKey.toLowerCase();
       const attrValue = rest.join('=').trim();
       if (key === 'domain' && attrValue) {
-        const candidate = attrValue.toLowerCase().replace(/^\\./, '');
+        const candidate = attrValue.toLowerCase().replace(/^\./, '');
         if (target.hostname !== candidate && !target.hostname.endsWith(`.${candidate}`)) return;
         domain = candidate;
         hostOnly = false;
@@ -120,7 +128,10 @@ export class HttpClient {
     };
 
     if (options.referer) {
-      headers['Referer'] = options.referer;
+      // WHATWG fetch requires ByteString-compatible header values. Provider URLs
+      // legitimately contain Arabic/non-ASCII slugs, so serialize URL headers
+      // to their percent-encoded wire form instead of rejecting the request.
+      headers['Referer'] = encodeUrlHeader(options.referer);
     }
 
     const cookieHeader = [this.getCookieString(url), options.cookies].filter(Boolean).join('; ');
@@ -161,7 +172,6 @@ export class HttpClient {
         responseHeaders[key.toLowerCase()] = val;
       });
 
-      // Track set-cookie
       const setCookies = typeof resp.headers.getSetCookie === 'function'
         ? resp.headers.getSetCookie()
         : [resp.headers.get('set-cookie')].filter((value): value is string => Boolean(value));
