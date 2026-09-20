@@ -3,14 +3,15 @@
 ## Current cycle
 - Start/main SHA: `1decf9126ae6737f04518045ea879cada2ec9616`; default branch `main`.
 - Active PR: #25 `qahtan/p0-runtime-wecima-evidence`; all work remains on this branch.
-- Inspected head `c87c36a9d6c62d922a84119f2aab9884ccabbeec`; CI run `35516477460`: install, lint, tests and build passed; Akwam runtime E2E failed; Yacine and WeCima runtime gates were skipped.
-- Root cause found in Akwam discovery routing: DomainRegistry primary is `https://akwam.ss/one`, but Akwam `searchInternal` and `getCatalogInternal` reduced it to origin with `siteRoot()`, issuing `/search` and `/series|movies` instead of preserving the configured `/one` application prefix.
-- Fix committed on the same PR: discovery/catalog URLs now preserve the configured base path. Code commit `9551bfa5fd83d762615847392ba50f8296c0252c`; exact-head CI pending at last inspection.
+- Verified head `07e9b8f2d4aefbddf2545302221cb95ae0bb2a2f`, CI run `35525982451`: install, lint, tests, build, Akwam E2E and Yacine TV E2E passed; WeCima E2E failed.
+- Fresh live inspection confirmed `wecima.cx` currently exposes `/series/<slug>` pages whose episode anchors use `/watch/<slug>` and visible `الحلقة N` labels. The old parser classified every `/watch/` URL as movie, and stream resolution treated iframe URLs as if they were resolved media.
+- Same-PR fix commit `47699689ccce2b0cea0981f24e32b75c2dffbabc`: classify episode-labelled `/watch/` links as series, extract episode anchors explicitly from series metadata, keep episode numbers, resolve direct player/media attributes, inspect bounded nested iframe pages, deduplicate streams, and never count a bare iframe page as a resolved media stream.
+- Exact-head CI for the fix had not appeared at last inspection; no merge or Working promotion claimed.
 - Source baseline: 3rb exact SHA `d27b00f1894a63f86786ff04939d3c76b58f6677`; explicit reuse permission remains documented but is not treated as a third-party license grant.
 
 ## Blockers ordered by release impact
 ### P0
-1. Finish PR #25. Acceptance: exact-head CI green; Akwam regression restored; Yacine remains green; WeCima completes applicable discovery/catalog -> metadata -> episodes -> safe non-empty HTTP(S) stream resolution; PR mergeable; then merge.
+1. Finish PR #25. Acceptance: exact-head CI green; Akwam and Yacine regressions remain green; WeCima completes discovery/catalog -> metadata -> episodes -> safe non-empty HTTP(S) media resolution; PR mergeable; then merge.
 2. Continue runtime E2E evidence for remaining providers. Working/Partial/Broken follows current live evidence only.
 3. SyriaLive remains independent/fail-closed until its own source contract is verified; never alias Yacine.
 4. `https://zx33.tuktuk-sa.online` remains quarantined until identity fingerprint, content type and parser prerequisites are proven.
@@ -25,54 +26,53 @@
 - UX polish/refactor only after P0/P1 closure.
 
 ## Work performed this cycle
-- Re-read repository/default branch, exact main SHA, branches and active PR from GitHub.
-- Verified exact-head CI run `35516477460`: static/unit/build gates green; Akwam live regression failed before Yacine/WeCima.
-- Audited Akwam provider and DomainRegistry and found a deterministic base-path defect: configured `/one` was discarded for discovery routes.
-- Corrected Akwam discovery URL construction on PR #25 without weakening the runtime harness or identity verification.
-- Fresh web evidence still shows Akwam content under the live `/one`/site family; HTTP reachability alone is not counted as provider success.
+- Re-read current PR/head and exact-head workflow evidence from GitHub.
+- Proved Akwam and Yacine live regressions green on run `35525982451`; WeCima is now the first failing runtime gate.
+- Inspected current WeCima provider code and current live series/watch contract.
+- Corrected episode classification/extraction and made stream resolution stricter: direct media only, bounded nested player inspection, no bare iframe false-positive.
+- Did not weaken the runtime harness.
 
 ## CI/tests/artifacts
-- `c87c36a...`: lint/tests/build green; Akwam runtime gate failed; later runtime gates skipped.
-- `9551bfa5fd83d762615847392ba50f8296c0252c`: Akwam base-path fix; exact-head CI pending at last inspection.
+- `07e9b8f...`: lint/tests/build + Akwam E2E + Yacine E2E green; WeCima E2E red.
+- `47699689ccce2b0cea0981f24e32b75c2dffbabc`: WeCima runtime-contract fix; exact-head CI pending at last inspection.
 - No release-ready artifact claimed.
 
 ## Provider runtime classification
-- Working: Yacine TV (last exact-head live proof retained; current PR regression gate has not re-run past Akwam yet).
-- Partial: Akwam, WeCima, FaselHD, ArabSeed, Anime4Up, WitAnime, 3isk, EgyDead.
+- Working: Akwam, Yacine TV.
+- Partial: WeCima, FaselHD, ArabSeed, Anime4Up, WitAnime, 3isk, EgyDead.
 - Broken/degraded: SyriaLive, intentionally fail-closed pending independent contract verification.
 - Quarantined: tuktuk candidate; identity/content contract unproven.
 
 ## Weighted verified completion
 | Category | Weight | Verified fraction | Earned | Evidence / cap reason |
 |---|---:|---:|---:|---|
-| Repo/build/CI baseline | 5 | 0.90 | 4.5 | lint/tests/build green; live gate currently red |
+| Repo/build/CI baseline | 5 | 0.90 | 4.5 | static/unit/build green; live gate red at WeCima |
 | Qahtan identity + provenance/licenses | 5 | 0.45 | 2.3 | third-party audit open |
 | DomainRegistry + identity verification + failover | 12 | 0.72 | 8.6 | tested implementation; broad live proof incomplete |
 | Provider health/circuit/ranking/cache | 10 | 0.75 | 7.5 | deterministic tests; broad runtime proof incomplete |
 | Backend/network/proxy security | 13 | 0.75 | 9.8 | tested security contracts; full outbound audit open |
-| Discovery/catalog/search coverage | 8 | 0.60 | 4.8 | Akwam regression exposed/fixed; remaining providers incomplete |
-| Metadata/details + seasons/episodes | 8 | 0.60 | 4.8 | narrow live coverage |
-| Stream resolution/extractors | 10 | 0.45 | 4.5 | narrow live coverage |
-| End-to-end provider runtime evidence | 15 | 0.10 | 1.5 | 1/10 currently retained as proven Working |
+| Discovery/catalog/search coverage | 8 | 0.60 | 4.8 | live proof narrow across provider set |
+| Metadata/details + seasons/episodes | 8 | 0.60 | 4.8 | WeCima fix pending exact-head proof |
+| Stream resolution/extractors | 10 | 0.45 | 4.5 | WeCima resolver fix pending exact-head proof |
+| End-to-end provider runtime evidence | 15 | 0.20 | 3.0 | 2/10 currently proven Working |
 | Stremio compatibility/regression | 4 | 0.60 | 2.4 | suite green; broader live E2E absent |
 | Observability/performance/error isolation | 3 | 0.60 | 1.8 | partial tested coverage |
 | Release gate/artifact/runtime readiness | 7 | 0.30 | 2.1 | no v1.0; P0/P1 remain |
 
-**Overall Verified Product Completion: 54.6%.**
+**Overall Verified Product Completion: 56.1%.**
 
 ## Independent completion metrics
-- Runtime-Verified Provider Completion: **1/10 = 10.0%**. Working: Yacine TV. Partial: Akwam, WeCima, FaselHD, ArabSeed, Anime4Up, WitAnime, 3isk, EgyDead. Broken/degraded: SyriaLive.
+- Runtime-Verified Provider Completion: **2/10 = 20.0%**. Working: Akwam, Yacine TV. Partial: WeCima, FaselHD, ArabSeed, Anime4Up, WitAnime, 3isk, EgyDead. Broken/degraded: SyriaLive.
 - Release Gate Completion: **3/7 = 42.9%**. Fixed denominator seven. Proven: identity baseline, main CI baseline, tested DomainRegistry/health foundation. Unproven: complete security audit, no open P0/P1, advertised-provider E2E, exact release-SHA/artifact readiness.
 
 ## Percentage rationale
-Overall remains 54.6%: Akwam is not restored to Working until the new exact-head runtime gate proves the fix. Static/build success and a code fix do not earn E2E credit.
+Overall is 56.1% because Akwam and Yacine are both re-proven live on the current PR. The WeCima code fix earns no additional runtime credit until its exact-head E2E passes.
 
 ## Risks / what does not work yet
-- Akwam exact-head runtime regression is not yet re-proven after the base-path fix.
-- WeCima has not yet reached its live runtime gate because Akwam failed first.
+- WeCima exact-head E2E remains unproven after the new parser/resolver fix.
 - SyriaLive independent contract remains unproven.
 - Tuktuk candidate remains quarantined.
 - Full security/outbound audit, broad Stremio/extractor runtime regression, P1 licensing/dependency audit and release artifact gate remain open.
 
 ## Next target
-Stay on PR #25. Inspect exact-head CI for `9551bfa5...`; if Akwam still fails, use the first real runtime failure to correct the general route/parser/stream cause without weakening the harness. Once Akwam and Yacine regressions are green, finish WeCima E2E and merge only on exact-head green + mergeable.
+Stay on PR #25. Inspect exact-head CI for the WeCima fix. If WeCima still fails, use the first concrete runtime stage to fix the general parser/player contract without weakening the harness. Merge only when exact-head CI is green and the PR remains mergeable, then continue to the next highest P0 provider/runtime blocker.
