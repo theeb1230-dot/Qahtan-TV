@@ -3,7 +3,7 @@ import type { ProviderDetail, ProviderEpisode, ProviderItem, ResolvedStream } fr
 import type { StremioContentType } from '../../types/stremio.js';
 import { HttpClient } from '../../utils/http.js';
 
-export class WeCimaProvider extends BaseProvider {
+export class WecimaProvider extends BaseProvider {
   private readonly http = new HttpClient();
   id = 'wecima';
   name = 'WeCima';
