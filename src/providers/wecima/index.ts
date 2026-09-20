@@ -93,9 +93,9 @@ export class WeCimaProvider extends BaseProvider {
       playRes.$('iframe').each((_, ifr) => { const src = playRes.$(ifr).attr('src'); if (src) iframes.push(this.fixUrl(src, origin)); });
       playRes.$('source[src],video[src]').each((_, el) => {
         const src = playRes.$(el).attr('src');
-        if (src) streams.push({ url: this.fixUrl(src, origin), title: this.name, headers: { Referer: fullUrl } });
+        if (src) streams.push({ url: this.fixUrl(src, origin), name: this.name, headers: { Referer: fullUrl } });
       });
-      for (const iframe of iframes) streams.push({ url: iframe, title: this.name, headers: { Referer: fullUrl } });
+      for (const iframe of iframes) streams.push({ url: iframe, name: this.name, headers: { Referer: fullUrl } });
     } catch { return []; }
     return streams;
   }
