@@ -1,0 +1,86 @@
+import { registry } from '../src/providers/index.js';
+import { StremioContentType } from '../src/types/stremio.js';
+
+const providerId = process.argv[2];
+const query = process.argv.slice(3).join(' ') || 'مسلسل';
+if (!providerId) {
+  console.error('usage: npm run e2e:provider -- <provider-id> [query]');
+  process.exit(2);
+}
+
+const provider = registry.getProvider(providerId);
+if (!provider) {
+  console.error(JSON.stringify({ providerId, status: 'Broken', reason: 'provider-not-registered' }, null, 2));
+  process.exit(2);
+}
+
+type Evidence = {
+  providerId: string;
+  query: string;
+  status: 'Working' | 'Partial' | 'Broken';
+  search: number;
+  catalog: number;
+  meta: boolean;
+  episodes: number;
+  streams: number;
+  streamSchemesSafe: boolean;
+  selectedId?: string;
+  selectedType?: StremioContentType;
+  error?: string;
+};
+
+const evidence: Evidence = {
+  providerId,
+  query,
+  status: 'Broken',
+  search: 0,
+  catalog: 0,
+  meta: false,
+  episodes: 0,
+  streams: 0,
+  streamSchemesSafe: false,
+};
+
+try {
+  const search = await provider.search(query);
+  evidence.search = search.length;
+
+  let selected = search[0];
+  if (!selected) {
+    for (const type of provider.supportedTypes) {
+      const catalog = await provider.getCatalog(type, 1);
+      evidence.catalog += catalog.length;
+      if (!selected && catalog.length) selected = catalog[0];
+    }
+  } else {
+    const catalog = await provider.getCatalog(selected.type, 1);
+    evidence.catalog = catalog.length;
+  }
+
+  if (!selected) throw new Error('no runtime search/catalog item');
+  evidence.selectedId = selected.id;
+  evidence.selectedType = selected.type;
+
+  const contentId = selected.id.startsWith(`${providerId}:`) ? selected.id.slice(providerId.length + 1) : selected.id;
+  const meta = await provider.getMeta(contentId, selected.type);
+  evidence.meta = Boolean(meta);
+  if (!meta) throw new Error('metadata resolution returned null');
+
+  const episodes = meta.episodes || [];
+  evidence.episodes = episodes.length;
+  const episodeId = selected.type === 'series' && episodes.length ? episodes[0].id.replace(new RegExp(`^${providerId}:`), '') : undefined;
+  const streams = await provider.getStreams(contentId, selected.type, episodeId);
+  evidence.streams = streams.length;
+  evidence.streamSchemesSafe = streams.length > 0 && streams.every((stream) => /^https?:\/\//i.test(stream.url));
+
+  const seriesPathComplete = selected.type !== 'series' || episodes.length > 0;
+  evidence.status = evidence.search + evidence.catalog > 0 && evidence.meta && seriesPathComplete && evidence.streams > 0 && evidence.streamSchemesSafe
+    ? 'Working'
+    : 'Partial';
+} catch (error) {
+  evidence.error = (error as Error).message;
+  evidence.status = evidence.search > 0 || evidence.catalog > 0 || evidence.meta ? 'Partial' : 'Broken';
+}
+
+console.log(JSON.stringify(evidence, null, 2));
+process.exit(evidence.status === 'Working' ? 0 : 1);
