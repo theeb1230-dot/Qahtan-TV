@@ -1,57 +1,45 @@
 import { BaseProvider } from '../base.js';
-import { ProviderDetail, ProviderItem, ResolvedStream } from '../../types/provider.js';
-import { StremioContentType } from '../../types/stremio.js';
-import { HttpClient } from '../../utils/http.js';
-import { extractStreams } from '../../extractors/index.js';
+import type { ProviderDetail, ProviderEpisode, ProviderItem, ResolvedStream, StremioContentType } from '../../types.js';
 
-export class WecimaProvider extends BaseProvider {
-  private readonly http = new HttpClient();
-  id = 'wecima';
-  name = 'We Cima (وي سيما)';
-  lang = 'ar';
-  mainUrl = 'https://wecima.cx';
-  supportedTypes: StremioContentType[] = ['movie', 'series'];
+export class WeCimaProvider extends BaseProvider {
+  readonly id = 'wecima';
+  readonly name = 'WeCima';
+  readonly mainUrl = 'https://wecima.cx';
 
-  constructor() {
-    super();
-    this.initLogger();
-  }
-
-  private fixUrl(url?: string, baseUrl = this.mainUrl): string {
+  private fixUrl(url: string | undefined, base: string): string {
     if (!url) return '';
-    if (url.startsWith('//')) return `https:${url}`;
-    if (!url.startsWith('http')) return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
-    return url;
+    try { return new URL(url, base).toString(); } catch { return url; }
   }
 
-  private contentOrigin(contentId: string): string {
-    try { return new URL(contentId).origin; } catch { return this.mainUrl; }
+  private contentOrigin(id: string): string {
+    const normalized = id.startsWith(`${this.id}:`) ? id.slice(this.id.length + 1) : id;
+    try { return new URL(normalized).origin; } catch { return this.mainUrl; }
   }
 
-  private parseItems(resp: Awaited<ReturnType<HttpClient['get']>>, baseUrl: string): ProviderItem[] {
-    const items: ProviderItem[] = [];
-    const seen = new Set<string>();
-    resp.$('a[href]').each((_, a) => {
-      const href = resp.$(a).attr('href') || '';
-      if (!/\/(watch|series)\//i.test(href)) return;
-      const title = (resp.$(a).attr('title') || resp.$(a).find('img').attr('alt') || resp.$(a).text()).trim();
-      if (!title || title.length < 3) return;
-      const absoluteUrl = this.fixUrl(href, baseUrl);
-      if (seen.has(absoluteUrl)) return;
-      seen.add(absoluteUrl);
-      const isSeries = /\/series\//i.test(href) || /مسلسل|حلقة|موسم/.test(title);
-      items.push({
-        id: this.formatId(absoluteUrl), provider: this.name, type: isSeries ? 'series' : 'movie', title,
-        poster: this.fixUrl(resp.$(a).find('img').attr('src') || resp.$(a).find('img').attr('data-src'), baseUrl), url: absoluteUrl,
-      });
+  private formatId(url: string): string { return `${this.id}:${url}`; }
+
+  private parseItems(resp: Awaited<ReturnType<typeof this.http.get>>, baseUrl: string): ProviderItem[] {
+    const out = new Map<string, ProviderItem>();
+    resp.$('a[href]').each((_, el) => {
+      const href = resp.$(el).attr('href');
+      if (!href) return;
+      const url = this.fixUrl(href, baseUrl);
+      let type: StremioContentType | null = null;
+      if (/\/series\//i.test(url) || /episodes\.php/i.test(url)) type = 'series';
+      else if (/\/watch\//i.test(url) || /movies\.php/i.test(url)) type = 'movie';
+      if (!type) return;
+      const title = resp.$(el).attr('title')?.trim() || resp.$(el).find('h2,h3,.title,.post-title').first().text().trim() || resp.$(el).text().trim();
+      if (!title) return;
+      const img = resp.$(el).find('img').first();
+      const poster = this.fixUrl(img.attr('data-src') || img.attr('src'), baseUrl);
+      out.set(url, { id: this.formatId(url), provider: this.name, type, title, poster, url });
     });
-    return items;
+    return [...out.values()];
   }
 
   async searchInternal(query: string): Promise<ProviderItem[]> {
     return this.withHealthyDomain(async (baseUrl) => {
-      const candidates = [`${baseUrl}/?s=${encodeURIComponent(query)}`, `${baseUrl}/search.php?keywords=${encodeURIComponent(query)}`];
-      for (const url of candidates) {
+      for (const url of [`${baseUrl}/?s=${encodeURIComponent(query)}`, `${baseUrl}/search.php?keyword=${encodeURIComponent(query)}`]) {
         try {
           const resp = await this.http.get(url);
           const items = this.parseItems(resp, baseUrl);
@@ -79,15 +67,15 @@ export class WecimaProvider extends BaseProvider {
 
   async getMetaInternal(contentId: string, type: StremioContentType): Promise<ProviderDetail | null> {
     const origin = this.contentOrigin(contentId);
-    const fullUrl = this.fixUrl(contentId, origin);
+    const fullUrl = this.fixUrl(contentId.startsWith(`${this.id}:`) ? contentId.slice(this.id.length + 1) : contentId, origin);
     const resp = await this.http.get(fullUrl);
     const title = resp.$('h1').first().text().trim() || resp.$('meta[property="og:title"]').attr('content') || resp.$('title').text().trim();
     if (!title) return null;
     const poster = this.fixUrl(resp.$('meta[property="og:image"]').attr('content') || resp.$('.video-bibplayer-poster').css('background-image')?.replace(/url\(['"]?(.*?)['"]?\)/, '$1'), origin);
     const description = resp.$('meta[property="og:description"]').attr('content') || resp.$('.video-description').text().trim();
-    const episodes = type === 'series' ? this.parseItems(resp, origin)
+    const episodes: ProviderEpisode[] | undefined = type === 'series' ? this.parseItems(resp, origin)
       .filter((item) => item.type === 'series' || /حلقة|episode/i.test(item.title))
-      .map((item, index) => ({ id: item.id, title: item.title, season: 1, episode: index + 1 })) : undefined;
+      .map((item, index) => ({ id: item.id, title: item.title, season: 1, episode: index + 1, url: item.url })) : undefined;
     return { id: this.formatId(fullUrl), provider: this.name, type, title, poster, description, url: fullUrl, episodes };
   }
 
@@ -103,10 +91,12 @@ export class WecimaProvider extends BaseProvider {
       const playRes = await this.http.get(playUrl, { headers: { Referer: fullUrl } });
       const iframes: string[] = [];
       playRes.$('iframe').each((_, ifr) => { const src = playRes.$(ifr).attr('src'); if (src) iframes.push(this.fixUrl(src, origin)); });
-      for (const iframeUrl of iframes) streams.push(...await extractStreams(iframeUrl, playUrl));
-    } catch (e) {
-      this.logger.debug(`Error getting WeCima streams: ${(e as Error).message}`);
-    }
-    return streams.filter((stream) => /^https?:\/\//i.test(stream.url));
+      playRes.$('source[src],video[src]').each((_, el) => {
+        const src = playRes.$(el).attr('src');
+        if (src) streams.push({ url: this.fixUrl(src, origin), title: this.name, headers: { Referer: fullUrl } });
+      });
+      for (const iframe of iframes) streams.push({ url: iframe, title: this.name, headers: { Referer: fullUrl } });
+    } catch { return []; }
+    return streams;
   }
 }
