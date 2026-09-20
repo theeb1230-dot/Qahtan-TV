@@ -2,9 +2,16 @@ import { BaseProvider } from '../base.js';
 import type { ProviderDetail, ProviderEpisode, ProviderItem, ResolvedStream, StremioContentType } from '../../types.js';
 
 export class WeCimaProvider extends BaseProvider {
-  readonly id = 'wecima';
-  readonly name = 'WeCima';
-  readonly mainUrl = 'https://wecima.cx';
+  id = 'wecima';
+  name = 'WeCima';
+  lang = 'ar';
+  mainUrl = 'https://wecima.cx';
+  supportedTypes: StremioContentType[] = ['movie', 'series'];
+
+  constructor() {
+    super();
+    this.initLogger();
+  }
 
   private fixUrl(url: string | undefined, base: string): string {
     if (!url) return '';
@@ -15,8 +22,6 @@ export class WeCimaProvider extends BaseProvider {
     const normalized = id.startsWith(`${this.id}:`) ? id.slice(this.id.length + 1) : id;
     try { return new URL(normalized).origin; } catch { return this.mainUrl; }
   }
-
-  private formatId(url: string): string { return `${this.id}:${url}`; }
 
   private parseItems(resp: Awaited<ReturnType<typeof this.http.get>>, baseUrl: string): ProviderItem[] {
     const out = new Map<string, ProviderItem>();
