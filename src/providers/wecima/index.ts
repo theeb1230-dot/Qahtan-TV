@@ -32,15 +32,14 @@ export class WecimaProvider extends BaseProvider {
       const href = resp.$(el).attr('href');
       if (!href) return;
       const url = this.fixUrl(href, baseUrl);
+      const text = (resp.$(el).attr('title') || resp.$(el).find('h2,h3,.title,.post-title').first().text() || resp.$(el).text()).trim();
       let type: StremioContentType | null = null;
-      if (/\/series\//i.test(url) || /episodes\.php/i.test(url)) type = 'series';
+      if (/\/series\//i.test(url) || /episodes\.php/i.test(url) || (/\/watch\//i.test(url) && /حلقة|episode/i.test(text))) type = 'series';
       else if (/\/watch\//i.test(url) || /movies\.php/i.test(url)) type = 'movie';
-      if (!type) return;
-      const title = resp.$(el).attr('title')?.trim() || resp.$(el).find('h2,h3,.title,.post-title').first().text().trim() || resp.$(el).text().trim();
-      if (!title) return;
+      if (!type || !text) return;
       const img = resp.$(el).find('img').first();
       const poster = this.fixUrl(img.attr('data-src') || img.attr('src'), baseUrl);
-      out.set(url, { id: this.formatId(url), provider: this.name, type, title, poster, url });
+      out.set(url, { id: this.formatId(url), provider: this.name, type, title: text, poster, url });
     });
     return [...out.values()];
   }
@@ -81,9 +80,21 @@ export class WecimaProvider extends BaseProvider {
     if (!title) return null;
     const poster = this.fixUrl(resp.$('meta[property="og:image"]').attr('content') || resp.$('.video-bibplayer-poster').css('background-image')?.replace(/url\(['"]?(.*?)['"]?\)/, '$1'), origin);
     const description = resp.$('meta[property="og:description"]').attr('content') || resp.$('.video-description').text().trim();
-    const episodes: ProviderEpisode[] | undefined = type === 'series' ? this.parseItems(resp, origin)
-      .filter((item) => item.type === 'series' || /حلقة|episode/i.test(item.title))
-      .map((item, index) => ({ id: item.id, title: item.title, season: 1, episode: index + 1, url: item.url })) : undefined;
+    let episodes: ProviderEpisode[] | undefined;
+    if (type === 'series') {
+      const seen = new Set<string>();
+      episodes = [];
+      resp.$('a[href]').each((_, el) => {
+        const href = resp.$(el).attr('href');
+        const label = (resp.$(el).attr('title') || resp.$(el).text()).trim();
+        if (!href || !/حلقة|episode/i.test(label)) return;
+        const url = this.fixUrl(href, origin);
+        if (!/\/watch\//i.test(url) || seen.has(url)) return;
+        seen.add(url);
+        const number = Number(label.match(/(?:حلقة|episode)\s*(\d+)/i)?.[1] || episodes!.length + 1);
+        episodes!.push({ id: this.formatId(url), title: label, season: 1, episode: number, url });
+      });
+    }
     return { id: this.formatId(fullUrl), provider: this.name, type, title, poster, description, url: fullUrl, episodes };
   }
 
@@ -92,19 +103,28 @@ export class WecimaProvider extends BaseProvider {
     const normalized = targetId.startsWith(`${this.id}:`) ? targetId.slice(this.id.length + 1) : targetId;
     const origin = this.contentOrigin(normalized);
     const fullUrl = this.fixUrl(normalized, origin);
-    const streams: ResolvedStream[] = [];
-    const vidMatch = fullUrl.match(/vid=([a-zA-Z0-9]+)/);
-    const playUrl = vidMatch ? `${origin}/play.php?vid=${vidMatch[1]}` : fullUrl;
+    const streams = new Map<string, ResolvedStream>();
+    const add = (candidate: string | undefined, referer: string) => {
+      const url = this.fixUrl(candidate, referer);
+      if (!/^https?:\/\//i.test(url) || streams.has(url)) return;
+      streams.set(url, { url, name: this.name, headers: { Referer: referer } });
+    };
     try {
-      const playRes = await this.http.get(playUrl, { headers: { Referer: fullUrl } });
+      const playRes = await this.http.get(fullUrl, { headers: { Referer: origin } });
+      playRes.$('source[src],video[src]').each((_, el) => add(playRes.$(el).attr('src'), fullUrl));
+      playRes.$('[data-src],[data-url],[data-file]').each((_, el) => add(playRes.$(el).attr('data-src') || playRes.$(el).attr('data-url') || playRes.$(el).attr('data-file'), fullUrl));
       const iframes: string[] = [];
-      playRes.$('iframe').each((_, ifr) => { const src = playRes.$(ifr).attr('src'); if (src) iframes.push(this.fixUrl(src, origin)); });
-      playRes.$('source[src],video[src]').each((_, el) => {
-        const src = playRes.$(el).attr('src');
-        if (src) streams.push({ url: this.fixUrl(src, origin), name: this.name, headers: { Referer: fullUrl } });
+      playRes.$('iframe[src]').each((_, el) => {
+        const src = this.fixUrl(playRes.$(el).attr('src'), fullUrl);
+        if (/^https?:\/\//i.test(src)) iframes.push(src);
       });
-      for (const iframe of iframes) streams.push({ url: iframe, name: this.name, headers: { Referer: fullUrl } });
+      for (const iframe of iframes.slice(0, 8)) {
+        try {
+          const nested = await this.http.get(iframe, { headers: { Referer: fullUrl } });
+          nested.$('source[src],video[src],[data-src],[data-url],[data-file]').each((_, el) => add(nested.$(el).attr('src') || nested.$(el).attr('data-src') || nested.$(el).attr('data-url') || nested.$(el).attr('data-file'), iframe));
+        } catch { /* server may require browser execution; do not mislabel iframe as a media stream */ }
+      }
     } catch { return []; }
-    return streams;
+    return [...streams.values()];
   }
 }
