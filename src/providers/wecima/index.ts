@@ -1,8 +1,10 @@
 import { BaseProvider } from '../base.js';
 import type { ProviderDetail, ProviderEpisode, ProviderItem, ResolvedStream } from '../../types/provider.js';
 import type { StremioContentType } from '../../types/stremio.js';
+import { HttpClient } from '../../utils/http.js';
 
 export class WeCimaProvider extends BaseProvider {
+  private readonly http = new HttpClient();
   id = 'wecima';
   name = 'WeCima';
   lang = 'ar';
