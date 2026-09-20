@@ -18,7 +18,11 @@ export function runDomainRegistryTests(): void {
   assert.equal(registry.getProvider('wecima')?.mainUrl, 'https://wecima.cx');
   assert.equal(registry.getProvider('faselhd')?.mainUrl, 'https://www.fasel-hd.com');
   assert.equal(registry.getProvider('3isk')?.mainUrl, 'https://3iskk.xyz');
-  assert.notEqual(registry.getProvider('yacinetv')?.mainUrl, 'https://yacinee-tv.net');
+  // Yacine public identity and encrypted operational API are deliberately separate contracts.
+  assert.equal(registry.getProvider('yacinetv')?.mainUrl, 'https://yacinee-tv.net');
+  assert.equal(domainRegistry.get('yacinetv')?.primary, 'https://def.ycnapi.com/api');
+  assert.deepEqual(domainRegistry.get('yacinetv')?.fallbacks, ['https://deft.yacinelive.com/api']);
+  assert.equal(domainRegistry.get('yacinetv')?.lastKnownGood, null);
   assert.equal(registry.getProvider('syrialive')?.mainUrl, 'https://www.mewsry.live');
   assert.notEqual(registry.getProvider('syrialive')?.mainUrl, registry.getProvider('yacinetv')?.mainUrl);
   // HTTP reachability alone must never promote an unverified domain.
