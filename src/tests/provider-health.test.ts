@@ -11,15 +11,15 @@ export async function runProviderHealthTests(): Promise<void> {
   const result = await health.execute('faselhd', async (url) => {
     attempted.push(url);
     now += 25;
-    if (url === 'https://www.fasel-hd.com') throw new Error('upstream unavailable');
+    if (url === 'https://www.fasel-hd.co') throw new Error('upstream unavailable');
     return { value: 'stream-ok', identityVerified: true };
   });
   assert.equal(result.value, 'stream-ok');
-  assert.equal(result.url, 'https://fasellhd.rest/main');
-  assert.deepEqual(attempted, ['https://www.fasel-hd.com', 'https://fasellhd.rest/main']);
-  assert.equal(domains.get('faselhd')?.lastKnownGood, 'https://fasellhd.rest/main');
-  assert.equal(domains.observation('faselhd', 'https://www.fasel-hd.com')?.health, 'dead');
-  assert.equal(domains.observation('faselhd', 'https://fasellhd.rest/main')?.health, 'healthy');
+  assert.equal(result.url, 'https://www.fasel-hd.com');
+  assert.deepEqual(attempted, ['https://www.fasel-hd.co', 'https://www.fasel-hd.com']);
+  assert.equal(domains.get('faselhd')?.lastKnownGood, 'https://www.fasel-hd.com');
+  assert.equal(domains.observation('faselhd', 'https://www.fasel-hd.co')?.health, 'dead');
+  assert.equal(domains.observation('faselhd', 'https://www.fasel-hd.com')?.health, 'healthy');
 
   // A reachable impostor must never be promoted to lastKnownGood.
   const before = domains.get('faselhd')?.lastKnownGood;
