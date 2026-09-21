@@ -26,7 +26,13 @@ export class WecimaProvider extends BaseProvider {
   private isIdentityVerified(resp: Awaited<ReturnType<typeof this.http.get>>): boolean {
     const title = resp.$('title').text();
     const body = resp.$('body').text().slice(0, 12000);
-    return /we\s*cima|wecima|وى\s*سيما|وي\s*سيما/i.test(`${title} ${body}`) && resp.$('a[href*="/watch/"]').length > 0;
+    const branded = /we\s*cima|wecima|وى\s*سيما|وي\s*سيما|ما[ىي]\s*سيما|my\s*cima|mycima/i.test(`${title} ${body}`);
+    // Current WeCima landing/search/catalog pages link to canonical content pages
+    // (/series/<slug> and /movies/<slug>); /watch/ is primarily an episode/player route.
+    // Identity therefore requires both the brand fingerprint and a parser-relevant
+    // content structure, rather than the older /watch/-only assumption.
+    const contentLinks = resp.$('a[href*="/series/"],a[href*="/movies/"],a[href*="/watch/"]');
+    return branded && contentLinks.length > 0;
   }
 
   private parseItems(resp: Awaited<ReturnType<typeof this.http.get>>, baseUrl: string): ProviderItem[] {
@@ -38,7 +44,7 @@ export class WecimaProvider extends BaseProvider {
       const text = (resp.$(el).attr('title') || resp.$(el).find('h2,h3,.title,.post-title').first().text() || resp.$(el).text()).trim();
       let type: StremioContentType | null = null;
       if (/\/series\//i.test(url) || /episodes\.php/i.test(url) || (/\/watch\//i.test(url) && /مسلسل|حلقة|episode|series/i.test(text))) type = 'series';
-      else if (/\/watch\//i.test(url) || /movies\.php/i.test(url)) type = 'movie';
+      else if (/\/movies\//i.test(url) || /\/movie\//i.test(url) || /\/watch\//i.test(url) || /movies\.php/i.test(url)) type = 'movie';
       if (!type || !text) return;
       const img = resp.$(el).find('img').first();
       const poster = this.fixUrl(img.attr('data-src') || img.attr('src'), baseUrl);
