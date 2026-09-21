@@ -3,16 +3,15 @@
 ## Current cycle
 - Start/end main SHA: `003f167613133054c4e08e257830822c012e0560`; default branch `main`.
 - Single active PR: #26 `qahtan/p0-runtime-faselhd-evidence`.
-- Inspected PR head at cycle start: `88085766c96e764afb4c295446f6a2371b6b39a9`.
-- CI run `35638480616` completed failure only at FaselHD runtime. install, lint, 26/26 tests, security contracts, build, Akwam E2E, Yacine E2E and the narrowly-scoped WeCima Cloudflare degraded contract all passed.
-- FaselHD evidence on that run: both configured domains failed identity before search/catalog, producing zero items/meta/streams. The canonical host remains independently evidenced by current public `/video/...` pages carrying `/embed/<id>/` iframes.
-- Root cause refined: the canonical landing page is sparse enough that brand/contract selectors are not a reliable identity oracle, and the prior sitemap check assumed a direct post sitemap rather than following a sitemap index/chain.
-- Code commit `b0fe8eacedebacbaa08bf83a65851d87f9b3dffe` now discovers first-party sitemap locations from raw XML, follows a bounded sitemap chain, selects only same-host `/video/` content, fetches that live sample, and requires both Fasel branding and parser-relevant `/video/` or `/embed/` structure. HTTP 200 alone is still insufficient and `fasellhd.rest/main` remains quarantined/fail-closed.
+- Inspected cycle-start PR head: `84b6c28b11e44336966b517fedc70b3380f1a69b`; CI run `35650984123` completed red only at FaselHD runtime. install/lint/26 tests/security contracts/build/Akwam/Yacine/WeCima degraded contract all passed.
+- New deterministic FaselHD diagnostics proved the exact blocker: `https://www.fasel-hd.com/` returns HTTP 403 to the GitHub-hosted runner (`brand=false`, `parserContract=false`, 5777 bytes). The old `fasellhd.rest/main` fallback is a different contract and is correctly rejected.
+- Fresh public evidence on 2026-09-22 identifies `https://www.fasel-hd.co/` as a live FaselHD catalog surface, while the `.com` origin is challenged/unstable for automation. The operational registry now uses `.co` as primary and keeps `.com` as a fail-closed fallback; no lastKnownGood is predeclared. The provider accepts only these explicit Fasel hosts and still requires brand + parser-contract proof before promotion.
+- Commits this cycle update registry/provider/tests for domain drift; latest code head before this state update was `3fed476ef56b0e85bf3286d749dba359370336f1`. Exact-head CI evidence is still required before any runtime credit or merge.
 - Source baseline: 3rb SHA `d27b00f1894a63f86786ff04939d3c76b58f6677`; reuse permission remains provenance only, not a third-party license grant.
 
 ## Blockers
 ### P0
-1. FaselHD E2E: exact-head proof of search/catalog -> metadata/details -> episodes when applicable -> non-empty safe HTTP(S) stream. No degraded waiver.
+1. FaselHD E2E: prove the new `.co` origin through search/catalog -> metadata/details -> episodes when applicable -> non-empty safe HTTP(S) stream. No degraded waiver.
 2. ArabSeed E2E.
 3. Anime4Up, WitAnime, 3isk, EgyDead E2E individually.
 4. SyriaLive independent source/contract proof or remain Broken/degraded.
@@ -29,18 +28,19 @@ UX/polish only after P0/P1.
 
 ## Acceptance criteria
 - Closed from merged work: Akwam real safe stream path; Yacine runtime regression; exact WeCima Cloudflare-only degraded contract; tested DomainRegistry/provider-health foundation.
-- Closed this cycle: FaselHD identity verification no longer assumes content exists on the landing page or in one fixed sitemap path. Discovery is bounded to first-party sitemap URLs and identity still requires a branded parser-compatible live content page.
+- Closed this cycle: FaselHD failure is no longer ambiguous. Exact CI evidence proves `.com` is blocked with HTTP 403 from the runner, and the structurally unrelated `fasellhd.rest` endpoint is not treated as a valid fallback. Registry/provider contracts now track the independently live `.co` origin without pre-promoting it.
 - Open: exact-head FaselHD full E2E through stream; all later provider/security/release gates.
 
 ## CI / tests / artifacts
 - Main `003f167613133054c4e08e257830822c012e0560`: green baseline.
-- PR head `88085766...`: run `35638480616` red only at FaselHD runtime. Static/unit/build and Akwam/Yacine/WeCima gates passed.
-- Latest code commit: `b0fe8eacedebacbaa08bf83a65851d87f9b3dffe`. No exact-head CI result was available immediately after commit, therefore no new runtime credit is awarded.
+- PR head `84b6c28...`: run `35650984123` red only at FaselHD. Akwam runtime: 24 search, 24 catalog, metadata, 2 episodes, 3 safe streams. Yacine: 186 catalog, metadata, 1 safe stream. WeCima: expected 403 + `cf-mitigated=challenge` degraded contract.
+- FaselHD on that run: `.com` landing HTTP 403; old `.rest` fallback rejected as non-canonical; zero search/catalog/meta/streams.
+- New domain-drift code has not yet produced exact-head CI evidence, so no new runtime credit is awarded.
 - Releases/artifacts: none claimed release-ready.
 
 ## Provider/domain health
 - Working: Akwam, Yacine TV.
-- Partial: FaselHD, ArabSeed, Anime4Up, WitAnime, 3isk, EgyDead.
+- Partial/unverified current runtime: FaselHD, ArabSeed, Anime4Up, WitAnime, 3isk, EgyDead.
 - Broken/degraded: WeCima (verified GitHub-runner Cloudflare challenge only), SyriaLive.
 - Quarantined and excluded from ten-provider denominator: Tuktuk candidate.
 
@@ -62,17 +62,16 @@ UX/polish only after P0/P1.
 
 **A) Overall Verified Product Completion: 58.3%.**
 
-**B) Runtime-Verified Provider Completion: 2/10 = 20.0%.** Working: Akwam, Yacine TV. Partial: FaselHD, ArabSeed, Anime4Up, WitAnime, 3isk, EgyDead. Broken/degraded: WeCima, SyriaLive.
+**B) Runtime-Verified Provider Completion: 2/10 = 20.0%.** Working: Akwam, Yacine TV. Partial/unverified: FaselHD, ArabSeed, Anime4Up, WitAnime, 3isk, EgyDead. Broken/degraded: WeCima, SyriaLive.
 
 **C) Release Gate Completion: 3/7 = 42.9%.** Fixed denominator seven. Full security closure, no-open-P0/P1, sufficient advertised-provider E2E coverage, and exact release-SHA/artifact readiness remain unproven.
 
-**D) Beta Readiness: 55.0%.** No increase is awarded for unverified code.
+**D) Beta Readiness: 55.0%.** No increase is awarded for unverified domain-drift code.
 
 ## Risks / what does not work
-- FaselHD has not yet passed exact-head runtime. Once identity advances, search/catalog or stream extraction may reveal the next live-contract defect.
-- FaselHD fallback is structurally different and remains fail-closed.
-- WeCima is unusable from the current GitHub-hosted runtime because of the specifically verified challenge; SyriaLive independence remains unproven.
+- FaselHD `.com` is conclusively HTTP-403-blocked from the GitHub runner. `.co` is independently live but still needs exact-head E2E proof through stream.
+- WeCima remains unusable from the current GitHub-hosted runtime because of its specifically verified Cloudflare challenge; SyriaLive independence remains unproven.
 - Security closure, broad Stremio/extractor runtime proof, licensing/dependency audit and release artifacts remain open.
 
 ## Next target
-Stay on PR #26. Inspect exact-head CI for the sitemap-chain identity repair. If FaselHD advances past identity, fix the first real search/meta/embed/stream defect without weakening E2E. Merge only when the final exact head is CI-green and mergeable; then move directly to ArabSeed E2E.
+Stay on PR #26. Inspect exact-head CI for the `.co` domain-drift repair. If identity/search/meta advances, fix the first real episode/embed/stream defect without weakening E2E. Merge only when the final exact head is CI-green and mergeable; then move directly to ArabSeed E2E.
