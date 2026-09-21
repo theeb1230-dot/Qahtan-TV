@@ -3,11 +3,10 @@
 ## Current cycle
 - Start/main SHA: `003f167613133054c4e08e257830822c012e0560`; default branch `main`.
 - Single active PR: #26 `qahtan/p0-runtime-faselhd-evidence`; all work remains on it.
-- Inspected head `5f957f1d10206df87bb6b0ade2770c367cbf2d40`; CI `35619995515` completed red only at FaselHD runtime. install/lint/26 tests/build, Akwam E2E, Yacine E2E and WeCima exact degraded contract all passed.
-- Full FaselHD log localized the failure to identity verification on both configured domains before search/catalog: zero items/meta/streams. This is not a stream-extractor failure yet.
-- Fresh public contract evidence confirms canonical `www.fasel-hd.com` still serves branded `/video/...` pages containing `/embed/<id>/` player frames, while `fasellhd.rest/main` uses a materially different `watch.php?vid=...` contract.
-- Code commit `f916b7cfb838d36fbab31ee9426e8b646642ac97` updates only the canonical adapter: identity accepts branded `/video/` or `/embed/` prerequisites, parsing supports canonical `/video/` links, metadata recognizes current headings/images, and playback recognizes `/embed/` frames. The incompatible `watch.php` fallback is deliberately not accepted by the new fingerprint.
-- Exact-head CI `35626505359` started for that code commit; no runtime credit is awarded until it completes.
+- Inspected PR head `3090a36c053dee407a959cfc05fbed62444efe08`; CI `35626581952` completed red only at FaselHD runtime. install/lint/26 tests/build, Akwam E2E, Yacine E2E and WeCima exact degraded contract all passed.
+- Full FaselHD log proved the first selector update was insufficient: both configured domains still failed identity before search/catalog, with zero items/meta/streams.
+- Fresh public evidence still proves the canonical `www.fasel-hd.com` contract exposes branded `/video/...` pages with `/embed/<id>/` frames. The defect is that search/category responses are being used as the identity oracle even when they contain no matching content cards.
+- Code commit `9d54f81543a5f3414c27d277defe2c18c47245d8` separates canonical-domain identity from result availability: identity is verified from the canonical landing contract (brand + parser-relevant `/video/` or legacy shape), then search/category parsing is allowed to return zero items without poisoning domain health. The incompatible `fasellhd.rest/main` host remains fail-closed by exact-host check; HTTP 200 alone is never accepted.
 - Source baseline: 3rb exact SHA `d27b00f1894a63f86786ff04939d3c76b58f6677`; explicit reuse permission remains provenance only, not a blanket third-party license.
 
 ## Blockers ordered by release impact
@@ -29,26 +28,26 @@
 
 ## Acceptance criteria status
 - Closed from merged PR #25: Akwam real safe stream path, Yacine regression, narrowly-scoped WeCima Cloudflare degradation, green exact main.
-- Closed this cycle: FaselHD failure localized to stale identity/parser prerequisites; canonical current `/video/` + `/embed/` contract implemented without falsely promoting the incompatible fallback.
+- Closed this cycle: FaselHD live failure localized to identity-oracle coupling; canonical identity is now verified independently from search/category result availability while the incompatible fallback stays fail-closed.
 - Open: exact-head FaselHD E2E proof through a real safe stream; later provider/security/release gates.
 
 ## Work performed this cycle
-- Re-read current PR/head, exact workflow/jobs/full logs and FaselHD provider implementation.
-- Confirmed CI `35619995515`: Akwam Working (24 search, 24 catalog, metadata, 1 episode, 2 safe streams), Yacine Working (186 catalog, metadata, 1 safe stream), WeCima exact Cloudflare degraded contract passed; FaselHD alone failed at domain identity verification.
-- Verified the canonical FaselHD public contract still exposes `/video/...` content with `/embed/...` frames. Verified the configured fallback exposes `watch.php?vid=...` and therefore is not parser-compatible by reachability alone.
-- Updated canonical FaselHD identity/parser/meta/player selectors for the current contract while keeping the different fallback fail-closed.
+- Re-read PR #26/exact head, workflow run/jobs/full logs, current FaselHD provider and current state document.
+- Confirmed CI `35626581952`: Akwam Working (24 search, 24 catalog, metadata, episode, 2 safe streams), Yacine Working (186 catalog, metadata, safe stream), WeCima exact Cloudflare degraded contract passed; FaselHD alone failed identity on both domains.
+- Re-verified public canonical FaselHD `/video/` pages with `/embed/` player frames.
+- Reworked FaselHD identity so canonical landing fingerprint and parser prerequisites establish domain identity independently of an empty search/category response. Fallback stays rejected because its contract/host differs.
 
 ## CI/tests/artifacts
-- Exact main `003f167613133054c4e08e257830822c012e0560`: push CI `35612982568` green.
-- PR head `5f957f1d...`: CI `35619995515` red only at FaselHD runtime; all preceding static/security/runtime regression gates green.
-- Code head `f916b7cfb838d36fbab31ee9426e8b646642ac97`: CI `35626505359` in progress at final inspection. No success claimed yet.
+- Exact main `003f167613133054c4e08e257830822c012e0560`: previously green.
+- PR head `3090a36c...`: CI `35626581952` red only at FaselHD runtime; all preceding static/security/runtime regression gates green.
+- Code commit `9d54f81543a5f3414c27d277defe2c18c47245d8`: canonical identity-oracle separation; exact-head CI not yet available at final inspection, so no runtime credit is awarded.
 - Releases: none. No release-ready artifact claimed.
 
 ## Provider/domain health
 - Akwam: Working on current PR regression evidence.
 - Yacine TV: Working on current PR regression evidence.
 - WeCima: Broken/degraded in GitHub-hosted runtime only for verified Cloudflare challenge; no fallback promoted.
-- FaselHD: Partial. Canonical identity/parser contract repaired; exact-head E2E pending. `fasellhd.rest/main` remains incompatible/fail-closed until a separate proven adapter exists.
+- FaselHD: Partial. Canonical identity root cause repaired in code; exact-head E2E pending. `fasellhd.rest/main` remains incompatible/fail-closed.
 - SyriaLive: Broken/degraded, independent/fail-closed.
 - Tuktuk: quarantined.
 
@@ -82,13 +81,13 @@
 - Beta Readiness: **55.0%**. Current code improvement receives no extra readiness credit before exact-head runtime proof.
 
 ## Percentage rationale
-- Overall remains **58.3%**, Runtime **20.0%**, Release Gate **42.9%**, Beta **55.0%**. The FaselHD canonical-contract fix is implementation evidence only while CI is pending, so no percentage is inflated for unverified code.
+- Overall remains **58.3%**, Runtime **20.0%**, Release Gate **42.9%**, Beta **55.0%**. The identity-oracle repair is implementation evidence only until exact-head CI proves the live path.
 
 ## Risks / what does not work yet
-- FaselHD exact-head runtime proof is pending; stream extraction may reveal a second blocker after identity/search is restored.
-- FaselHD fallback is a different contract and intentionally remains fail-closed rather than being falsely treated as compatible.
+- FaselHD exact-head runtime proof is pending; after identity is restored, search/catalog or stream extraction may expose the next contract defect.
+- FaselHD fallback is a different contract and intentionally remains fail-closed.
 - WeCima remains unusable from GitHub-hosted runners due the verified challenge; SyriaLive independent contract is unproven; Tuktuk remains quarantined.
 - Full security/outbound audit, broad Stremio/extractor regression, P1 licensing/dependency audit and release artifact gate remain open.
 
 ## Next target
-Stay on PR #26. Read exact-head CI `35626505359`. If FaselHD advances beyond identity but fails search/meta/stream, fix that exact canonical-contract defect without weakening E2E. Merge only after final exact-head CI is green and PR mergeable. After merge, advance directly to ArabSeed E2E.
+Stay on PR #26. Inspect exact-head CI after the canonical identity-oracle separation. If FaselHD advances beyond identity but fails search/meta/stream, fix that exact canonical-contract defect without weakening E2E. Merge only after final exact-head CI is green and PR mergeable. After merge, advance directly to ArabSeed E2E.
