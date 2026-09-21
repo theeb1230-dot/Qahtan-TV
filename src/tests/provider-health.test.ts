@@ -21,26 +21,29 @@ export async function runProviderHealthTests(): Promise<void> {
   assert.equal(domains.observation('faselhd', 'https://www.fasel-hd.co')?.health, 'dead');
   assert.equal(domains.observation('faselhd', 'https://www.fasel-hd.com')?.health, 'healthy');
 
-  // A reachable impostor must never be promoted to lastKnownGood.
-  const before = domains.get('faselhd')?.lastKnownGood;
+  // A fresh registry is intentional: the previous successful fallback must not
+  // leak into this independent identity-failure scenario via module-level state.
+  const identityDomains = new DomainRegistry();
+  const identityHealth = new ProviderHealthManager(identityDomains, { now: () => now, failureCooldownMs: 30_000 });
+  const before = identityDomains.get('faselhd')?.lastKnownGood;
   await assert.rejects(
-    () => health.execute('faselhd', async () => {
+    () => identityHealth.execute('faselhd', async () => {
       now += 10;
       return { value: 'wrong-site', identityVerified: false };
     }),
     /All domains failed/,
   );
-  assert.equal(domains.get('faselhd')?.lastKnownGood, before);
+  assert.equal(identityDomains.get('faselhd')?.lastKnownGood, before);
 
   // The user-supplied tuktuk candidate remains quarantined without identity proof.
   await assert.rejects(
-    () => health.execute('tuktuk_candidate', async () => {
+    () => identityHealth.execute('tuktuk_candidate', async () => {
       now += 5;
       return { value: 'reachable', identityVerified: false };
     }),
     /identity verification failed/,
   );
-  assert.equal(domains.get('tuktuk_candidate')?.lastKnownGood, null);
+  assert.equal(identityDomains.get('tuktuk_candidate')?.lastKnownGood, null);
 
   console.log('✓ provider health/circuit-breaker contract tests');
 }
