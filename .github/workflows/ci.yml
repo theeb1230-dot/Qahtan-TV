@@ -26,3 +26,5 @@ jobs:
         env:
           EXPECT_DEGRADED_REASON: cloudflare-challenge
         run: npm run e2e:provider -- wecima "مسلسل"
+      - name: P0 runtime evidence - FaselHD
+        run: npm run e2e:provider -- faselhd "مسلسل"
