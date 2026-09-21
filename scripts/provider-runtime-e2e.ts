@@ -27,6 +27,7 @@ type Evidence = {
   selectedId?: string;
   selectedType?: StremioContentType;
   error?: string;
+  diagnostics?: Record<string, unknown>;
 };
 
 const evidence: Evidence = {
@@ -80,6 +81,39 @@ try {
 } catch (error) {
   evidence.error = (error as Error).message;
   evidence.status = evidence.search > 0 || evidence.catalog > 0 || evidence.meta ? 'Partial' : 'Broken';
+}
+
+// When WeCima fails before discovery, capture only non-sensitive response-contract
+// facts. This distinguishes parser drift from CDN/WAF denial without logging body,
+// cookies, tokens, media URLs, or other provider data. The gate still fails normally.
+if (providerId === 'wecima' && evidence.status !== 'Working') {
+  try {
+    const response = await fetch('https://wecima.cx/', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8',
+      },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(15000),
+    });
+    const html = await response.text();
+    const title = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim() || '';
+    evidence.diagnostics = {
+      status: response.status,
+      finalHost: new URL(response.url).hostname,
+      contentType: response.headers.get('content-type')?.split(';')[0] || null,
+      cfMitigated: response.headers.get('cf-mitigated') || null,
+      bodyBytes: Buffer.byteLength(html),
+      title: title.slice(0, 160),
+      brandFingerprint: /we\s*cima|wecima|وى\s*سيما|وي\s*سيما|my\s*cima|mycima/i.test(html),
+      canonicalSeriesLinks: (html.match(/href=["'][^"']*\/series\//gi) || []).length,
+      canonicalMovieLinks: (html.match(/href=["'][^"']*\/movies\//gi) || []).length,
+      watchLinks: (html.match(/href=["'][^"']*\/watch\//gi) || []).length,
+    };
+  } catch (diagnosticError) {
+    evidence.diagnostics = { requestError: (diagnosticError as Error).message };
+  }
 }
 
 console.log(JSON.stringify(evidence, null, 2));
