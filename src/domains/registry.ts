@@ -10,7 +10,9 @@ const configs: Record<string, ProviderDomainConfig> = {
   yacinetv:{providerId:'yacinetv',primary:'https://def.ycnapi.com/api',fallbacks:['https://deft.yacinelive.com/api'],candidates:[],lastKnownGood:null,health:'unknown',lastCheckedAt:null,identityHints:['yacine-api-contract']},
   syrialive:{providerId:'syrialive',primary:'https://www.mewsry.live',fallbacks:[],candidates:[],lastKnownGood:'https://www.mewsry.live',health:'unknown',lastCheckedAt:null,identityHints:['match','مباراة','مباريات']},
   wecima:{providerId:'wecima',primary:'https://wecima.cx',fallbacks:[],candidates:[],lastKnownGood:'https://wecima.cx',health:'unknown',lastCheckedAt:null,identityHints:['wecima','وي سيما']},
-  faselhd:{providerId:'faselhd',primary:'https://www.fasel-hd.com',fallbacks:['https://fasellhd.rest/main'],candidates:[],lastKnownGood:'https://www.fasel-hd.com',health:'unknown',lastCheckedAt:null,identityHints:['fasel','فاصل']},
+  // fasel-hd.com currently challenges hosted automation while fasel-hd.co exposes the live FaselHD catalog contract.
+  // Keep the challenged origin only as a fallback; it still requires the provider's identity/parser proof before promotion.
+  faselhd:{providerId:'faselhd',primary:'https://www.fasel-hd.co',fallbacks:['https://www.fasel-hd.com'],candidates:[],lastKnownGood:null,health:'unknown',lastCheckedAt:null,identityHints:['fasel','فاصل']},
   arabseed:{providerId:'arabseed',primary:'https://www.arabseed.wine/home/',fallbacks:[],candidates:[],lastKnownGood:'https://www.arabseed.wine/home/',health:'unknown',lastCheckedAt:null,identityHints:['arabseed','عرب سيد']},
   anime4up:{providerId:'anime4up',primary:'https://w1.anime4up.rest/home8/',fallbacks:[],candidates:[],lastKnownGood:'https://w1.anime4up.rest/home8/',health:'unknown',lastCheckedAt:null,identityHints:['anime4up']},
   witanime:{providerId:'witanime',primary:'https://witanime.you',fallbacks:['https://ristoanime.me'],candidates:[],lastKnownGood:'https://witanime.you',health:'unknown',lastCheckedAt:null,identityHints:['anime','انمي']},
