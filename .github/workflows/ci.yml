@@ -22,5 +22,7 @@ jobs:
         run: npm run e2e:provider -- akwam "مسلسل"
       - name: P0 runtime evidence - Yacine TV
         run: npm run e2e:provider -- yacinetv "رياضة"
-      - name: P0 runtime evidence - WeCima
+      - name: P0 runtime evidence - WeCima degraded contract
+        env:
+          EXPECT_DEGRADED_REASON: cloudflare-challenge
         run: npm run e2e:provider -- wecima "مسلسل"
