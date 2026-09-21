@@ -3,7 +3,7 @@ export type DomainHealth = 'unknown' | 'healthy' | 'degraded' | 'dead';
 export interface DomainObservation { health:DomainHealth; lastCheckedAt:string|null; lastSuccessAt:string|null; latencyMs:number|null; consecutiveFailures:number; cooldownUntil:string|null; identityVerified:boolean; reason:string|null; }
 export interface ProviderDomainConfig { providerId:string; primary:string; fallbacks:string[]; candidates:string[]; lastKnownGood:string|null; health:DomainHealth; lastCheckedAt:string|null; identityHints:string[]; }
 
-const configs: Record<string, ProviderDomainConfig> = {
+const baseConfigs: Record<string, ProviderDomainConfig> = {
   akwam:{providerId:'akwam',primary:'https://akwam.ss/one',fallbacks:[],candidates:[],lastKnownGood:'https://akwam.ss/one',health:'unknown',lastCheckedAt:null,identityHints:['akwam']},
   // The public Yacine website is product identity, while runtime data uses a separate encrypted API contract.
   // Only API origins belong in operational ranking; promotion still requires successful decrypt + JSON contract validation by the provider.
@@ -20,12 +20,27 @@ const configs: Record<string, ProviderDomainConfig> = {
   egydead:{providerId:'egydead',primary:'https://tv10.egydead.live/h3/',fallbacks:[],candidates:[],lastKnownGood:'https://tv10.egydead.live/h3/',health:'unknown',lastCheckedAt:null,identityHints:['egydead','ايجي']},
   tuktuk_candidate:{providerId:'tuktuk_candidate',primary:'https://zx33.tuktuk-sa.online',fallbacks:[],candidates:[],lastKnownGood:null,health:'unknown',lastCheckedAt:null,identityHints:[]},
 };
-const observations=new Map<string,DomainObservation>(); const keyFor=(providerId:string,url:string)=>`${providerId}|${url}`;
+
+const cloneConfig=(value:ProviderDomainConfig):ProviderDomainConfig=>({...value,fallbacks:[...value.fallbacks],candidates:[...value.candidates],identityHints:[...value.identityHints]});
+const freshConfigs=():Record<string,ProviderDomainConfig>=>Object.fromEntries(Object.entries(baseConfigs).map(([id,value])=>[id,cloneConfig(value)]));
+const keyFor=(providerId:string,url:string)=>`${providerId}|${url}`;
+
+/**
+ * Runtime domain state belongs to a registry instance. Keeping observations and
+ * lastKnownGood in module-level objects made nominally fresh registries share
+ * circuit/ranking state across tests and would also couple independent runtime
+ * consumers. The immutable base contract is cloned for every instance instead.
+ */
 export class DomainRegistry {
-  get(providerId:string):ProviderDomainConfig|undefined{return configs[providerId];}
-  all():ProviderDomainConfig[]{return Object.values(configs).map(v=>({...v,fallbacks:[...v.fallbacks],candidates:[...v.candidates],identityHints:[...v.identityHints]}));}
-  observation(providerId:string,url:string):DomainObservation|undefined{const o=observations.get(keyFor(providerId,url));return o?{...o}:undefined;}
-  orderedUrls(providerId:string,now=Date.now()):string[]{const c=configs[providerId];if(!c)return[];const urls=[...new Set([c.lastKnownGood,c.primary,...c.fallbacks,...c.candidates].filter((v):v is string=>Boolean(v)))];return urls.sort((a,b)=>{const oa=observations.get(keyFor(providerId,a)),ob=observations.get(keyFor(providerId,b));const ac=oa?.cooldownUntil?Date.parse(oa.cooldownUntil)>now:false,bc=ob?.cooldownUntil?Date.parse(ob.cooldownUntil)>now:false;if(ac!==bc)return ac?1:-1;const score=(o?:DomainObservation)=>(o?.identityVerified?100:0)+(o?.health==='healthy'?50:o?.health==='degraded'?10:o?.health==='dead'?-100:0)-(o?.consecutiveFailures||0)*10-(o?.latencyMs||0)/1000;return score(ob)-score(oa);});}
-  mark(providerId:string,url:string,health:DomainHealth,checkedAt=new Date().toISOString(),details:{identityVerified?:boolean;latencyMs?:number;reason?:string;cooldownMs?:number}={}):void{const c=configs[providerId];if(!c)return;const previous=observations.get(keyFor(providerId,url));const success=health==='healthy'&&details.identityVerified===true;const failures=success?0:(previous?.consecutiveFailures||0)+(health==='dead'||health==='degraded'?1:0);const cooldownMs=details.cooldownMs??(failures>=3?Math.min(300_000,30_000*2**Math.min(failures-3,3)):0);const obs:DomainObservation={health,lastCheckedAt:checkedAt,lastSuccessAt:success?checkedAt:(previous?.lastSuccessAt||null),latencyMs:details.latencyMs??null,consecutiveFailures:failures,cooldownUntil:cooldownMs?new Date(Date.parse(checkedAt)+cooldownMs).toISOString():null,identityVerified:details.identityVerified??false,reason:details.reason??null};observations.set(keyFor(providerId,url),obs);c.health=health;c.lastCheckedAt=checkedAt;if(success)c.lastKnownGood=url;}
+  private readonly configs:Record<string,ProviderDomainConfig>;
+  private readonly observations=new Map<string,DomainObservation>();
+
+  constructor(){this.configs=freshConfigs();}
+
+  get(providerId:string):ProviderDomainConfig|undefined{return this.configs[providerId];}
+  all():ProviderDomainConfig[]{return Object.values(this.configs).map(cloneConfig);}
+  observation(providerId:string,url:string):DomainObservation|undefined{const o=this.observations.get(keyFor(providerId,url));return o?{...o}:undefined;}
+  orderedUrls(providerId:string,now=Date.now()):string[]{const c=this.configs[providerId];if(!c)return[];const urls=[...new Set([c.lastKnownGood,c.primary,...c.fallbacks,...c.candidates].filter((v):v is string=>Boolean(v)))];return urls.sort((a,b)=>{const oa=this.observations.get(keyFor(providerId,a)),ob=this.observations.get(keyFor(providerId,b));const ac=oa?.cooldownUntil?Date.parse(oa.cooldownUntil)>now:false,bc=ob?.cooldownUntil?Date.parse(ob.cooldownUntil)>now:false;if(ac!==bc)return ac?1:-1;const score=(o?:DomainObservation)=>(o?.identityVerified?100:0)+(o?.health==='healthy'?50:o?.health==='degraded'?10:o?.health==='dead'?-100:0)-(o?.consecutiveFailures||0)*10-(o?.latencyMs||0)/1000;return score(ob)-score(oa);});}
+  mark(providerId:string,url:string,health:DomainHealth,checkedAt=new Date().toISOString(),details:{identityVerified?:boolean;latencyMs?:number;reason?:string;cooldownMs?:number}={}):void{const c=this.configs[providerId];if(!c)return;const previous=this.observations.get(keyFor(providerId,url));const success=health==='healthy'&&details.identityVerified===true;const failures=success?0:(previous?.consecutiveFailures||0)+(health==='dead'||health==='degraded'?1:0);const cooldownMs=details.cooldownMs??(failures>=3?Math.min(300_000,30_000*2**Math.min(failures-3,3)):0);const obs:DomainObservation={health,lastCheckedAt:checkedAt,lastSuccessAt:success?checkedAt:(previous?.lastSuccessAt||null),latencyMs:details.latencyMs??null,consecutiveFailures:failures,cooldownUntil:cooldownMs?new Date(Date.parse(checkedAt)+cooldownMs).toISOString():null,identityVerified:details.identityVerified??false,reason:details.reason??null};this.observations.set(keyFor(providerId,url),obs);c.health=health;c.lastCheckedAt=checkedAt;if(success)c.lastKnownGood=url;}
 }
 export const domainRegistry=new DomainRegistry();
