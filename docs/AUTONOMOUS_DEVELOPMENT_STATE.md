@@ -3,11 +3,9 @@
 ## Current cycle
 - Start/main SHA: `1decf9126ae6737f04518045ea879cada2ec9616`; default branch `main`.
 - Active PR: #25 `qahtan/p0-runtime-wecima-evidence`; all work remains on this branch.
-- Verified prior head `1133d6289bd23c827b8416704225cb909ee52b27`, CI run `35532278456`: install, lint, 26/26 addon tests, network-security contracts, provider-health/circuit-breaker tests, in-flight coalescing tests, build, Akwam E2E and Yacine TV E2E all passed. WeCima failed before discovery because identity verification returned false, then its sole domain entered cooldown.
-- Live inspection on 2026-09-21 confirmed `https://wecima.cx/` identifies itself as WECIMA/وى سيما, exposes current `/watch/` content, and has a current series catalog at `/seriestv`.
-- Same-PR fix commit `2760118792b36d886d50632cb9c36ec7edf855c3`: separate identity fingerprinting from non-empty search results; require WeCima textual fingerprint plus `/watch/` structure; use `/seriestv`/`/movies` category routes; classify `/watch/` cards containing مسلسل/حلقة/series/episode as series. Empty search results no longer falsely poison a verified domain before catalog fallback.
-- CI run `35538779954` on head `c337906aea7ecf7e2c2aea62caa238a543cca419` completed red: install/lint/26 tests/security/health/coalescing/build + Akwam/Yacine E2E passed; WeCima still failed at identity verification before catalog/meta/stream.
-- Fresh 2026-09-21 inspection proved the remaining verifier assumption was stale: current WeCima landing/catalog pages expose canonical `/series/<slug>` and `/movies/<slug>` links; `/watch/` is not required on those pages. Same-PR fix `4b6514dd9f86a59fb32827336190639790fb93a5` now requires brand fingerprint plus parser-relevant `/series/`, `/movies/`, or `/watch/` structure and recognizes canonical movie URLs. Exact-head CI is pending; no Working promotion claimed.
+- Exact-head CI run `35564332928` on `0199b2ab1b96f5637a3aa37a8a806d31288c9d26`: install, lint, 26/26 tests, security/health/coalescing contracts, build, Akwam E2E and Yacine E2E passed; WeCima still failed at search identity verification before catalog/meta/stream.
+- Fresh live evidence on 2026-09-21 confirms current WeCima pages expose canonical `/series/<slug>` and `/watch/<slug>` content routes. The search response can omit the site-wide brand/header, so requiring brand text on every search response still falsely poisons an otherwise parser-compatible domain.
+- Same-PR fix `c0e6a0df3827434c8c135ef2a5307da809dc16a0`: search/catalog identity now accepts either full brand+canonical-structure fingerprint or canonical parser prerequisites plus at least one successfully parsed item. HTTP 200 alone remains insufficient; empty/unparseable responses still fail closed.
 - Source baseline: 3rb exact SHA `d27b00f1894a63f86786ff04939d3c76b58f6677`; explicit reuse permission remains documented but is not treated as a third-party license grant.
 
 ## Blockers ordered by release impact
@@ -26,33 +24,42 @@
 ### P2
 - UX polish/refactor only after P0/P1 closure.
 
+## Acceptance criteria status
+- Closed this cycle: exact failure stage re-proven from full job log; stale search-page identity assumption isolated; verifier remains fail-closed without HTTP-200 promotion.
+- Open: WeCima must return a real parsed item, metadata, episodes when series, and safe non-empty media streams; exact-head CI must be green; PR must be mergeable before merge.
+
 ## Work performed this cycle
-- Re-read repository/default branch, all branches, open PR #25/exact head, recent commits, workflow run/jobs/full log, current state/workflow/package/provider code.
-- Re-read PR #25, exact head and full failed job log.
-- Proved failure stage precisely: WeCima search returned `identity verification failed`; catalog then had `No healthy domain available`, so stream parsing was not reached at all.
-- Verified live WeCima identity and current category contract independently.
-- Fixed the architectural coupling between identity verification and search-result cardinality, added current category routes, and corrected series classification for current `/watch/` cards.
-- Kept the runtime harness strict; HTTP 200 alone still cannot promote a domain or provider.
+- Re-read current PR/exact head and exact-head Actions run/jobs/full logs.
+- Confirmed Akwam and Yacine runtime regressions remain green.
+- Proved WeCima still fails specifically at search identity verification and never reaches metadata or stream resolution.
+- Compared current verifier/parser assumptions against fresh public WeCima page structure.
+- Fixed the general identity rule for search/catalog responses: canonical parser structure is accepted only when it yields at least one usable parsed item; brand fingerprint remains the stronger path.
+- Kept the runtime harness strict and made no Working promotion.
 
 ## CI/tests/artifacts
-- `1133d628...`: lint/tests/build + Akwam E2E + Yacine E2E green; WeCima red at identity/discovery gate.
-- `c337906...` / run `35538779954`: all static/unit/build gates + Akwam/Yacine E2E green; WeCima red at identity gate.
-- `4b6514dd9f86a59fb32827336190639790fb93a5`: corrected stale `/watch/`-only identity structure and canonical movie-path classification; exact-head CI pending.
+- `0199b2ab...` / run `35564332928`: lint/tests/build + Akwam/Yacine E2E green; WeCima red at search identity gate.
+- `c0e6a0df3827434c8c135ef2a5307da809dc16a0`: search/catalog identity fix; exact-head CI pending at state-update time.
 - No release-ready artifact claimed.
+
+## Provider/domain health
+- Akwam: Working, runtime E2E green.
+- Yacine TV: Working, runtime E2E green.
+- WeCima: Broken on last completed exact-head evidence; sole registered domain `wecima.cx` is parser-compatible in fresh public evidence but new verifier fix is pending CI proof.
+- SyriaLive: Broken/degraded and intentionally independent/fail-closed.
+- Tuktuk candidate: quarantined; identity/content contract unproven.
 
 ## Provider runtime classification
 - Working: Akwam, Yacine TV.
 - Partial: FaselHD, ArabSeed, Anime4Up, WitAnime, 3isk, EgyDead.
-- Broken: WeCima on last completed exact-head evidence; fix pending proof.
-- Broken/degraded: SyriaLive, intentionally fail-closed pending independent contract verification.
-- Quarantined: tuktuk candidate; identity/content contract unproven.
+- Broken: WeCima, SyriaLive.
+- Quarantined: tuktuk candidate.
 
 ## Weighted verified completion
 | Category | Weight | Verified fraction | Earned | Evidence / cap reason |
 |---|---:|---:|---:|---|
 | Repo/build/CI baseline | 5 | 0.90 | 4.5 | static/unit/build green; live gate red at WeCima |
 | Qahtan identity + provenance/licenses | 5 | 0.45 | 2.3 | third-party audit open |
-| DomainRegistry + identity verification + failover | 12 | 0.72 | 8.6 | tested implementation; WeCima live identity fix pending proof |
+| DomainRegistry + identity verification + failover | 12 | 0.72 | 8.6 | tested implementation; WeCima verifier fix pending proof |
 | Provider health/circuit/ranking/cache | 10 | 0.75 | 7.5 | deterministic tests; broad runtime proof incomplete |
 | Backend/network/proxy security | 13 | 0.75 | 9.8 | tested security contracts; full outbound audit open |
 | Discovery/catalog/search coverage | 8 | 0.60 | 4.8 | live proof narrow; WeCima fix pending CI |
@@ -70,13 +77,13 @@
 - Release Gate Completion: **3/7 = 42.9%**. Fixed denominator seven. Proven: identity baseline, main CI baseline, tested DomainRegistry/health foundation. Unproven: complete security audit, no open P0/P1, advertised-provider E2E, exact release-SHA/artifact readiness.
 
 ## Percentage rationale
-Overall remains 56.1%. The completed CI proves Akwam/Yacine and the tested foundations, but WeCima's latest completed evidence is Broken at identity/discovery. The new fix receives no runtime credit until exact-head E2E proves it.
+Overall remains 56.1%. Akwam/Yacine and the tested foundations are re-proven on the current PR, but WeCima remains Broken on the latest completed exact-head run. The new verifier fix earns no runtime credit until exact-head E2E proves it.
 
 ## Risks / what does not work yet
-- WeCima remains Broken on last completed runtime evidence. The canonical-content identity fix is unproven until its exact-head CI completes.
+- WeCima remains Broken on last completed runtime evidence; new search/catalog identity fix is pending proof.
 - SyriaLive independent contract remains unproven.
 - Tuktuk candidate remains quarantined.
 - Full security/outbound audit, broad Stremio/extractor runtime regression, P1 licensing/dependency audit and release artifact gate remain open.
 
 ## Next target
-Stay on PR #25. Inspect exact-head CI after `4b6514dd9f86a59fb32827336190639790fb93a5` plus this state update. If identity/catalog passes and a later WeCima stage fails, fix that concrete stage without weakening the harness. Merge only when exact-head CI is green and PR remains mergeable; then continue the highest remaining P0.
+Stay on PR #25. Inspect exact-head CI after `c0e6a0df3827434c8c135ef2a5307da809dc16a0` plus this state update. If identity/catalog passes and a later WeCima stage fails, fix that concrete stage without weakening the harness. Merge only when exact-head CI is green and PR remains mergeable; then continue the highest remaining P0.
