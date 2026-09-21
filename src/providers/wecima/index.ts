@@ -54,19 +54,27 @@ export class WecimaProvider extends BaseProvider {
 
   async searchInternal(query: string): Promise<ProviderItem[]> {
     return this.withHealthyDomain(async (baseUrl) => {
+      // Verify the provider against its stable landing-page contract first. Search
+      // endpoints legitimately return empty/minimal documents for broad queries;
+      // that must not poison an otherwise verified domain in the health manager.
+      let domainVerified = false;
+      try {
+        const home = await this.http.get(`${baseUrl}/`);
+        domainVerified = this.isIdentityVerified(home);
+      } catch { /* search attempts below still fail closed */ }
+
       for (const url of [`${baseUrl}/?s=${encodeURIComponent(query)}`, `${baseUrl}/search.php?keyword=${encodeURIComponent(query)}`]) {
         try {
           const resp = await this.http.get(url);
           const items = this.parseItems(resp, baseUrl);
-          // Search responses can omit the site-wide branding/header while still exposing
-          // canonical WeCima result routes. Treat those parser prerequisites as identity
-          // evidence only when at least one usable result was actually parsed.
-          const verified = this.isIdentityVerified(resp) || (this.hasCanonicalContent(resp) && items.length > 0);
-          if (!verified) continue;
+          const responseVerified = this.isIdentityVerified(resp) || (this.hasCanonicalContent(resp) && items.length > 0);
+          if (!domainVerified && !responseVerified) continue;
           return { value: items, identityVerified: true };
         } catch { /* try compatible fallback */ }
       }
-      return { value: [], identityVerified: false };
+      // An empty search is a valid search result once the domain itself is verified.
+      // Catalog discovery can then proceed without an artificial circuit-breaker trip.
+      return { value: [], identityVerified: domainVerified };
     });
   }
 
