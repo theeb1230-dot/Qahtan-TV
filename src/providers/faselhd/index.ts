@@ -38,24 +38,58 @@ export class FaselhdProvider extends BaseProvider {
     return this.brandVerified($) && this.parserContractVerified($);
   }
 
+  private sitemapLocations(xml: string): string[] {
+    return [...xml.matchAll(/<loc>\s*(?:<!\[CDATA\[)?([^<\]]+)(?:\]\]>)?\s*<\/loc>/gi)]
+      .map((match) => match[1].trim().replace(/&amp;/g, '&'));
+  }
+
   private async verifyCanonicalDomain(baseUrl: string): Promise<boolean> {
-    // The home page can be intentionally sparse. Verify the exact canonical host and
-    // its brand first, then require parser-relevant structure either on the landing
-    // page or in WordPress' own post sitemap. This is structural evidence, not HTTP
-    // 200 and not a hard-coded title. The incompatible watch.php fallback stays shut.
+    // Identity is fail-closed: exact canonical host plus a branded page carrying a
+    // parser-relevant /video/ or /embed/ contract. The landing page is not assumed
+    // to expose content. When sparse, discover a current content URL from the site's
+    // own sitemap chain and verify that page instead of trusting HTTP 200 or a fixed
+    // title. The structurally incompatible watch.php fallback remains quarantined.
     if (new URL(baseUrl).hostname !== new URL(this.mainUrl).hostname) return false;
+    const headers = { 'User-Agent': MOBILE_USER_AGENT };
     try {
-      const landing = await this.http.get(`${baseUrl}/`, { headers: { 'User-Agent': MOBILE_USER_AGENT } });
-      if (!this.brandVerified(landing.$)) return false;
-      if (this.parserContractVerified(landing.$)) return true;
-      for (const path of ['/wp-sitemap-posts-post-1.xml', '/post-sitemap.xml']) {
+      const landing = await this.http.get(`${baseUrl}/`, { headers });
+      if (this.identityVerified(landing.$)) return true;
+
+      const sitemapSeeds = ['/wp-sitemap.xml', '/sitemap_index.xml', '/wp-sitemap-posts-post-1.xml', '/post-sitemap.xml'];
+      const checked = new Set<string>();
+      const sitemapQueue = sitemapSeeds.map((path) => `${baseUrl}${path}`);
+      let contentCandidate = '';
+
+      while (sitemapQueue.length && checked.size < 6 && !contentCandidate) {
+        const sitemapUrl = sitemapQueue.shift()!;
+        if (checked.has(sitemapUrl)) continue;
+        checked.add(sitemapUrl);
         try {
-          const sitemap = await this.http.get(`${baseUrl}${path}`, { headers: { 'User-Agent': MOBILE_USER_AGENT } });
-          const locations = sitemap.$('loc').map((_: any, el: any) => sitemap.$(el).text()).get();
-          if (locations.some((url: string) => /\/video\//i.test(url))) return true;
+          const sitemap = await this.http.get(sitemapUrl, { headers, timeout: 5000 });
+          const locations = this.sitemapLocations(sitemap.text);
+          contentCandidate = locations.find((url) => {
+            try {
+              const parsed = new URL(url);
+              return parsed.hostname === new URL(baseUrl).hostname && /\/video\//i.test(parsed.pathname);
+            } catch { return false; }
+          }) || '';
+          if (!contentCandidate) {
+            for (const location of locations) {
+              try {
+                const parsed = new URL(location);
+                if (parsed.hostname === new URL(baseUrl).hostname && /sitemap.*\.xml|wp-sitemap.*\.xml/i.test(parsed.pathname) && !checked.has(location)) {
+                  sitemapQueue.push(location);
+                }
+              } catch {}
+              if (sitemapQueue.length >= 8) break;
+            }
+          }
         } catch {}
       }
-      return false;
+
+      if (!contentCandidate) return false;
+      const sample = await this.http.get(contentCandidate, { headers, timeout: 7000 });
+      return this.identityVerified(sample.$);
     } catch {
       return false;
     }
