@@ -49,38 +49,60 @@ try {
   const search = await provider.search(query);
   evidence.search = search.length;
 
-  let selected = search[0];
-  if (!selected) {
+  const candidates = [...search];
+  if (candidates.length) {
+    const catalog = await provider.getCatalog(candidates[0].type, 1);
+    evidence.catalog = catalog.length;
+    for (const item of catalog) {
+      if (!candidates.some((candidate) => candidate.id === item.id)) candidates.push(item);
+    }
+  } else {
     for (const type of provider.supportedTypes) {
       const catalog = await provider.getCatalog(type, 1);
       evidence.catalog += catalog.length;
-      if (!selected && catalog.length) selected = catalog[0];
+      for (const item of catalog) {
+        if (!candidates.some((candidate) => candidate.id === item.id)) candidates.push(item);
+      }
     }
-  } else {
-    const catalog = await provider.getCatalog(selected.type, 1);
-    evidence.catalog = catalog.length;
   }
 
-  if (!selected) throw new Error('no runtime search/catalog item');
-  evidence.selectedId = selected.id;
-  evidence.selectedType = selected.type;
+  if (!candidates.length) throw new Error('no runtime search/catalog item');
 
-  const contentId = selected.id.startsWith(`${providerId}:`) ? selected.id.slice(providerId.length + 1) : selected.id;
-  const meta = await provider.getMeta(contentId, selected.type);
-  evidence.meta = Boolean(meta);
-  if (!meta) throw new Error('metadata resolution returned null');
+  // A live catalog can contain a temporarily broken title even while the provider is
+  // healthy. Prove the provider against a small bounded sample instead of allowing
+  // the first arbitrary search result to become a single-title availability oracle.
+  // The gate still requires one real metadata -> episodes (for series) -> safe stream
+  // path; failures are not waived and the sample is deliberately capped.
+  for (const selected of candidates.slice(0, 3)) {
+    evidence.selectedId = selected.id;
+    evidence.selectedType = selected.type;
+    const contentId = selected.id.startsWith(`${providerId}:`) ? selected.id.slice(providerId.length + 1) : selected.id;
+    try {
+      const meta = await provider.getMeta(contentId, selected.type);
+      evidence.meta = evidence.meta || Boolean(meta);
+      if (!meta) continue;
 
-  const episodes = meta.episodes || [];
-  evidence.episodes = episodes.length;
-  const episodeId = selected.type === 'series' && episodes.length ? episodes[0].id.replace(new RegExp(`^${providerId}:`), '') : undefined;
-  const streams = await provider.getStreams(contentId, selected.type, episodeId);
-  evidence.streams = streams.length;
-  evidence.streamSchemesSafe = streams.length > 0 && streams.every((stream) => /^https?:\/\//i.test(stream.url));
+      const episodes = meta.episodes || [];
+      evidence.episodes = Math.max(evidence.episodes, episodes.length);
+      if (selected.type === 'series' && !episodes.length) continue;
 
-  const seriesPathComplete = selected.type !== 'series' || episodes.length > 0;
-  evidence.status = evidence.search + evidence.catalog > 0 && evidence.meta && seriesPathComplete && evidence.streams > 0 && evidence.streamSchemesSafe
-    ? 'Working'
-    : 'Partial';
+      const episodeId = selected.type === 'series'
+        ? episodes[0].id.replace(new RegExp(`^${providerId}:`), '')
+        : undefined;
+      const streams = await provider.getStreams(contentId, selected.type, episodeId);
+      const schemesSafe = streams.length > 0 && streams.every((stream) => /^https?:\/\//i.test(stream.url));
+      if (!streams.length || !schemesSafe) continue;
+
+      evidence.streams = streams.length;
+      evidence.streamSchemesSafe = true;
+      evidence.status = 'Working';
+      break;
+    } catch (candidateError) {
+      evidence.error = (candidateError as Error).message;
+    }
+  }
+
+  if (evidence.status !== 'Working') evidence.status = evidence.meta ? 'Partial' : 'Broken';
 } catch (error) {
   evidence.error = (error as Error).message;
   evidence.status = evidence.search > 0 || evidence.catalog > 0 || evidence.meta ? 'Partial' : 'Broken';
