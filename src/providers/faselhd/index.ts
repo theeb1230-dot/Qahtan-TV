@@ -22,23 +22,40 @@ export class FaselhdProvider extends BaseProvider {
     return url;
   }
 
-  private identityVerified($: any): boolean {
+  private brandVerified($: any): boolean {
     const title = $('title').text().toLowerCase();
-    const generator = $('meta[name="generator"]').attr('content')?.toLowerCase() || '';
+    const ogSite = $('meta[property="og:site_name"]').attr('content')?.toLowerCase() || '';
+    return title.includes('fasel') || title.includes('فاصل') || ogSite.includes('fasel') || ogSite.includes('فاصل');
+  }
+
+  private parserContractVerified($: any): boolean {
     const hasCanonicalContract = $('a[href*="/video/"], iframe[src*="/embed/"], iframe[data-src*="/embed/"]').length > 0;
     const hasLegacyCanonicalShape = $('div.postDiv, #episodes, .posterImg, iframe[name="player_iframe"], .serversList').length > 0;
-    const hasBrand = title.includes('fasel') || title.includes('فاصل') || generator.includes('wordpress');
-    return hasBrand && (hasCanonicalContract || hasLegacyCanonicalShape);
+    return hasCanonicalContract || hasLegacyCanonicalShape;
+  }
+
+  private identityVerified($: any): boolean {
+    return this.brandVerified($) && this.parserContractVerified($);
   }
 
   private async verifyCanonicalDomain(baseUrl: string): Promise<boolean> {
-    // Search/category pages may legitimately contain zero matching cards. Identity is
-    // therefore established from the canonical landing contract, never from HTTP 200
-    // alone and never from the incompatible watch.php fallback.
+    // The home page can be intentionally sparse. Verify the exact canonical host and
+    // its brand first, then require parser-relevant structure either on the landing
+    // page or in WordPress' own post sitemap. This is structural evidence, not HTTP
+    // 200 and not a hard-coded title. The incompatible watch.php fallback stays shut.
     if (new URL(baseUrl).hostname !== new URL(this.mainUrl).hostname) return false;
     try {
       const landing = await this.http.get(`${baseUrl}/`, { headers: { 'User-Agent': MOBILE_USER_AGENT } });
-      return this.identityVerified(landing.$);
+      if (!this.brandVerified(landing.$)) return false;
+      if (this.parserContractVerified(landing.$)) return true;
+      for (const path of ['/wp-sitemap-posts-post-1.xml', '/post-sitemap.xml']) {
+        try {
+          const sitemap = await this.http.get(`${baseUrl}${path}`, { headers: { 'User-Agent': MOBILE_USER_AGENT } });
+          const locations = sitemap.$('loc').map((_: any, el: any) => sitemap.$(el).text()).get();
+          if (locations.some((url: string) => /\/video\//i.test(url))) return true;
+        } catch {}
+      }
+      return false;
     } catch {
       return false;
     }
