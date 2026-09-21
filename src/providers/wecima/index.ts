@@ -23,16 +23,15 @@ export class WecimaProvider extends BaseProvider {
     try { return new URL(normalized).origin; } catch { return this.mainUrl; }
   }
 
+  private hasCanonicalContent(resp: Awaited<ReturnType<typeof this.http.get>>): boolean {
+    return resp.$('a[href*="/series/"],a[href*="/movies/"],a[href*="/watch/"]').length > 0;
+  }
+
   private isIdentityVerified(resp: Awaited<ReturnType<typeof this.http.get>>): boolean {
     const title = resp.$('title').text();
     const body = resp.$('body').text().slice(0, 12000);
     const branded = /we\s*cima|wecima|وى\s*سيما|وي\s*سيما|ما[ىي]\s*سيما|my\s*cima|mycima/i.test(`${title} ${body}`);
-    // Current WeCima landing/search/catalog pages link to canonical content pages
-    // (/series/<slug> and /movies/<slug>); /watch/ is primarily an episode/player route.
-    // Identity therefore requires both the brand fingerprint and a parser-relevant
-    // content structure, rather than the older /watch/-only assumption.
-    const contentLinks = resp.$('a[href*="/series/"],a[href*="/movies/"],a[href*="/watch/"]');
-    return branded && contentLinks.length > 0;
+    return branded && this.hasCanonicalContent(resp);
   }
 
   private parseItems(resp: Awaited<ReturnType<typeof this.http.get>>, baseUrl: string): ProviderItem[] {
@@ -58,9 +57,12 @@ export class WecimaProvider extends BaseProvider {
       for (const url of [`${baseUrl}/?s=${encodeURIComponent(query)}`, `${baseUrl}/search.php?keyword=${encodeURIComponent(query)}`]) {
         try {
           const resp = await this.http.get(url);
-          const verified = this.isIdentityVerified(resp);
-          if (!verified) continue;
           const items = this.parseItems(resp, baseUrl);
+          // Search responses can omit the site-wide branding/header while still exposing
+          // canonical WeCima result routes. Treat those parser prerequisites as identity
+          // evidence only when at least one usable result was actually parsed.
+          const verified = this.isIdentityVerified(resp) || (this.hasCanonicalContent(resp) && items.length > 0);
+          if (!verified) continue;
           return { value: items, identityVerified: true };
         } catch { /* try compatible fallback */ }
       }
@@ -77,8 +79,9 @@ export class WecimaProvider extends BaseProvider {
       for (const url of [categoryUrl, homeUrl, legacy]) {
         try {
           const resp = await this.http.get(url);
-          if (!this.isIdentityVerified(resp)) continue;
           const items = this.parseItems(resp, baseUrl).filter((item) => item.type === type);
+          const verified = this.isIdentityVerified(resp) || (this.hasCanonicalContent(resp) && items.length > 0);
+          if (!verified) continue;
           if (items.length) return { value: items, identityVerified: true };
         } catch { /* try compatible fallback */ }
       }
