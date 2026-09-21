@@ -10,7 +10,7 @@ export class FaselhdProvider extends BaseProvider {
   id = 'faselhd';
   name = 'FaselHD (فاصل إعلاني)';
   lang = 'ar';
-  mainUrl = 'https://www.fasel-hd.com';
+  mainUrl = 'https://www.fasel-hd.co';
   supportedTypes: StremioContentType[] = ['movie', 'series', 'anime'];
 
   constructor() { super(); this.initLogger(); }
@@ -44,7 +44,8 @@ export class FaselhdProvider extends BaseProvider {
   }
 
   private async verifyCanonicalDomain(baseUrl: string): Promise<boolean> {
-    if (new URL(baseUrl).hostname !== new URL(this.mainUrl).hostname) {
+    const allowedHosts = new Set(['www.fasel-hd.co', 'fasel-hd.co', 'www.fasel-hd.com', 'fasel-hd.com']);
+    if (!allowedHosts.has(new URL(baseUrl).hostname)) {
       this.logger.debug(`FaselHD identity rejected non-canonical host ${new URL(baseUrl).hostname}`);
       return false;
     }
