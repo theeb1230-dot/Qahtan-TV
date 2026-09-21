@@ -6,7 +6,8 @@
 - Verified prior head `1133d6289bd23c827b8416704225cb909ee52b27`, CI run `35532278456`: install, lint, 26/26 addon tests, network-security contracts, provider-health/circuit-breaker tests, in-flight coalescing tests, build, Akwam E2E and Yacine TV E2E all passed. WeCima failed before discovery because identity verification returned false, then its sole domain entered cooldown.
 - Live inspection on 2026-09-21 confirmed `https://wecima.cx/` identifies itself as WECIMA/وى سيما, exposes current `/watch/` content, and has a current series catalog at `/seriestv`.
 - Same-PR fix commit `2760118792b36d886d50632cb9c36ec7edf855c3`: separate identity fingerprinting from non-empty search results; require WeCima textual fingerprint plus `/watch/` structure; use `/seriestv`/`/movies` category routes; classify `/watch/` cards containing مسلسل/حلقة/series/episode as series. Empty search results no longer falsely poison a verified domain before catalog fallback.
-- Exact-head CI for the fix is pending; no merge or Working promotion claimed.
+- CI run `35538779954` on head `c337906aea7ecf7e2c2aea62caa238a543cca419` completed red: install/lint/26 tests/security/health/coalescing/build + Akwam/Yacine E2E passed; WeCima still failed at identity verification before catalog/meta/stream.
+- Fresh 2026-09-21 inspection proved the remaining verifier assumption was stale: current WeCima landing/catalog pages expose canonical `/series/<slug>` and `/movies/<slug>` links; `/watch/` is not required on those pages. Same-PR fix `4b6514dd9f86a59fb32827336190639790fb93a5` now requires brand fingerprint plus parser-relevant `/series/`, `/movies/`, or `/watch/` structure and recognizes canonical movie URLs. Exact-head CI is pending; no Working promotion claimed.
 - Source baseline: 3rb exact SHA `d27b00f1894a63f86786ff04939d3c76b58f6677`; explicit reuse permission remains documented but is not treated as a third-party license grant.
 
 ## Blockers ordered by release impact
@@ -26,6 +27,7 @@
 - UX polish/refactor only after P0/P1 closure.
 
 ## Work performed this cycle
+- Re-read repository/default branch, all branches, open PR #25/exact head, recent commits, workflow run/jobs/full log, current state/workflow/package/provider code.
 - Re-read PR #25, exact head and full failed job log.
 - Proved failure stage precisely: WeCima search returned `identity verification failed`; catalog then had `No healthy domain available`, so stream parsing was not reached at all.
 - Verified live WeCima identity and current category contract independently.
@@ -34,7 +36,8 @@
 
 ## CI/tests/artifacts
 - `1133d628...`: lint/tests/build + Akwam E2E + Yacine E2E green; WeCima red at identity/discovery gate.
-- `2760118792b36d886d50632cb9c36ec7edf855c3`: identity/catalog/classification fix; exact-head CI pending at last inspection.
+- `c337906...` / run `35538779954`: all static/unit/build gates + Akwam/Yacine E2E green; WeCima red at identity gate.
+- `4b6514dd9f86a59fb32827336190639790fb93a5`: corrected stale `/watch/`-only identity structure and canonical movie-path classification; exact-head CI pending.
 - No release-ready artifact claimed.
 
 ## Provider runtime classification
@@ -70,10 +73,10 @@
 Overall remains 56.1%. The completed CI proves Akwam/Yacine and the tested foundations, but WeCima's latest completed evidence is Broken at identity/discovery. The new fix receives no runtime credit until exact-head E2E proves it.
 
 ## Risks / what does not work yet
-- WeCima fix is unproven until exact-head CI completes; last completed run classifies it Broken, not Partial.
+- WeCima remains Broken on last completed runtime evidence. The canonical-content identity fix is unproven until its exact-head CI completes.
 - SyriaLive independent contract remains unproven.
 - Tuktuk candidate remains quarantined.
 - Full security/outbound audit, broad Stremio/extractor runtime regression, P1 licensing/dependency audit and release artifact gate remain open.
 
 ## Next target
-Stay on PR #25. Inspect exact-head CI for `2760118792b36d886d50632cb9c36ec7edf855c3` plus this state update. If identity/catalog passes and a later WeCima stage fails, fix that concrete stage without weakening the harness. Merge only when exact-head CI is green and PR remains mergeable; then continue the highest remaining P0.
+Stay on PR #25. Inspect exact-head CI after `4b6514dd9f86a59fb32827336190639790fb93a5` plus this state update. If identity/catalog passes and a later WeCima stage fails, fix that concrete stage without weakening the harness. Merge only when exact-head CI is green and PR remains mergeable; then continue the highest remaining P0.
