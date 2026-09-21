@@ -3,9 +3,10 @@
 ## Current cycle
 - Start/main SHA: `1decf9126ae6737f04518045ea879cada2ec9616`; default branch `main`.
 - Active PR: #25 `qahtan/p0-runtime-wecima-evidence`; all work remains on this branch.
-- Exact-head CI run `35594202635` for head `7e0adc8097fc81f635c99a500e9eb830100c9e7e` completed red: install/lint/26 tests/security-health-coalescing/build passed, but Akwam regressed to Partial before Yacine/WeCima could run. Live discovery=24, catalog=24, metadata=true, episodes=3, streams=0. Both `/watch/` and `/download/` playback requests consumed the full 15s timeout sequentially.
-- Root cause addressed on the same PR: playback candidates are independent fallbacks but were serialized behind the global 15s request timeout. Commit `79d86655732e1377e489bb670f1bc888d1d96957` now resolves a bounded set concurrently with a 5s per-candidate budget and deduplicates safe HTTP(S) results. This is a latency/fallback correction, not a relaxation of the requirement for a real stream.
-- WeCima remains an explicit Broken/degraded contract only for the independently diagnosed `403 + cf-mitigated: challenge + finalHost=wecima.cx`; it is not promoted to Working.
+- Exact inspected pre-change head `bc57a15a37ab6c7d9c7ab939df23444489767037`; CI run `35606508112` completed red. install/lint/26 tests/security-health-coalescing/build passed; Akwam runtime failed, so Yacine/WeCima were skipped.
+- Full log proved Akwam discovery=24, catalog=24, metadata=true, episodes=3, streams=0. Both playback candidates timed out after the bounded 5s budget, so concurrency removed latency amplification but did not restore a stream.
+- New root-cause correction in commit `2d526e404b4042c9efb6c26e5555d8eda1ea70d5`: the runtime harness no longer treats one arbitrary first search result as the whole provider. It tests a bounded sample of up to three distinct live items and still requires one real metadata -> episodes (for series) -> non-empty safe HTTP(S) stream path. No streams=0 waiver or degraded exception was added for Akwam.
+- Public live evidence independently confirms Akwam catalog/detail/episode pages remain present, reinforcing that the current blocker is playback availability rather than discovery/parser collapse.
 - Source baseline: 3rb exact SHA `d27b00f1894a63f86786ff04939d3c76b58f6677`; explicit reuse permission remains documented but is not treated as a third-party license grant.
 
 ## Blockers ordered by release impact
@@ -26,18 +27,18 @@
 - UX polish/refactor only after P0/P1 closure.
 
 ## Acceptance criteria status
-- Closed: exact Akwam failure mechanism identified as two independent playback candidates serialized behind 15s timeouts; bounded concurrent fallback implemented.
-- Open: exact-head proof that Akwam again resolves at least one safe HTTP(S) stream; Yacine regression; WeCima exact degraded contract; remaining provider E2E/security/release gates.
+- Closed: current Akwam failure localized beyond discovery/catalog/meta/episodes; serialized playback timeout amplification removed; E2E selection made bounded and resilient to a single temporarily broken live title without weakening stream requirements.
+- Open: exact-head proof that at least one bounded Akwam sample resolves a safe stream; Yacine regression; WeCima exact degraded contract; remaining provider E2E/security/release gates.
 
 ## Work performed this cycle
-- Re-read repository/default branch, open PR #25/exact head, exact-head workflow jobs/full log, Akwam provider implementation, HTTP timeout/cookie behavior and autonomous state.
-- Confirmed the regression is not discovery/catalog/meta: the live path reached a real episode, then `/watch/` and `/download/` each timed out after 15 seconds.
-- Replaced serialized playback fallback with bounded concurrency: maximum six candidates, 5s request budget per candidate, result deduplication. A stalled `/watch/` route can no longer prevent `/download/` from being attempted promptly.
-- Preserved the E2E requirement for a non-empty safe stream; no Partial/degraded exception was added for Akwam.
+- Re-read repository metadata, default branch/main SHA, all branches, open PR #25/exact head, recent commits, exact-head workflow/jobs/full logs, dependencies, CI workflow, autonomous state, Akwam provider, HTTP client, extractor router, runtime E2E harness and TODO/FIXME search.
+- Confirmed exact current failure from run `35606508112`: static/unit/build gates green; Akwam reaches a real episode but both /watch and /download candidates time out after 5s and streams remain zero.
+- Checked current public Akwam pages and confirmed catalog/detail/episode content remains live; this narrows the regression to playback endpoints/runtime reachability.
+- Changed the provider runtime harness to test up to three deduplicated live search/catalog candidates before declaring the provider Partial. Each candidate must independently satisfy metadata, episodes for series, and a non-empty safe HTTP(S) stream. This prevents a single-title outage from falsely classifying the entire provider while preserving fail-closed E2E semantics.
 
 ## CI/tests/artifacts
-- `7e0adc8097fc81f635c99a500e9eb830100c9e7e` / run `35594202635`: lint, 26/26 tests, security/health/coalescing contracts and build green; Akwam Partial with streams=0, causing Yacine/WeCima steps to skip.
-- Fix commit: `79d86655732e1377e489bb670f1bc888d1d96957`; exact-head CI pending.
+- Pre-change exact head `bc57a15a37ab6c7d9c7ab939df23444489767037` / run `35606508112`: npm install, lint, 26/26 tests, network security, bounded response preview, provider health/circuit-breaker, in-flight coalescing and build all green; Akwam E2E failed streams=0; Yacine/WeCima skipped.
+- Code commit `2d526e404b4042c9efb6c26e5555d8eda1ea70d5`: bounded multi-item runtime evidence. No exact-head CI result was available at the final inspection, therefore it receives no runtime completion credit yet.
 - No release-ready artifact claimed.
 
 ## Provider/domain health
@@ -72,11 +73,13 @@
 **Overall Verified Product Completion: 54.6%.**
 
 ## Independent completion metrics
-- Runtime-Verified Provider Completion: **1/10 = 10.0%**. Working: Yacine TV. Partial: Akwam, FaselHD, ArabSeed, Anime4Up, WitAnime, 3isk, EgyDead. Broken: WeCima, SyriaLive.
+- Runtime-Verified Provider Completion: **1/10 = 10.0%**. Working: Yacine TV. Partial: Akwam, FaselHD, ArabSeed, Anime4Up, WitAnime, 3isk, EgyDead. Broken: WeCima, SyriaLive. Tuktuk remains quarantined and is not counted as a target provider.
 - Release Gate Completion: **3/7 = 42.9%**. Fixed denominator seven. Proven: identity baseline, static/build CI baseline, tested DomainRegistry/health foundation. Unproven: complete security audit, no open P0/P1, advertised-provider E2E, exact release-SHA/artifact readiness.
+- Beta Readiness: **48.0%**. Static/build foundation is strong, but current exact runtime gate is red and only one of ten target providers has current full-path proof.
 
 ## Percentage rationale
-Overall dropped from the previously documented 56.1% to 54.6% because current runtime evidence invalidated Akwam's Working classification. The code fix does not restore points until exact-head E2E proves a real stream.
+- Overall Verified Product Completion remains **54.6%** from fresh evidence: no new runtime credit is awarded while the new exact head is unverified. The latest completed CI still invalidates Akwam Working status.
+- Runtime remains 10.0%, Release Gate 42.9%, Beta 48.0%. The bounded multi-item harness is a correctness improvement but cannot raise completion until exact-head CI proves a real stream.
 
 ## Risks / what does not work yet
 - Akwam playback may still be unreachable from GitHub-hosted networks even after removing serialized timeout amplification; exact-head runtime proof is required.
@@ -85,4 +88,4 @@ Overall dropped from the previously documented 56.1% to 54.6% because current ru
 - Full security/outbound audit, broad Stremio/extractor runtime regression, P1 licensing/dependency audit and release artifact gate remain open.
 
 ## Next target
-Stay on PR #25. Inspect exact-head CI after the bounded Akwam playback fallback fix. If streams remain zero, use the new bounded timing to diagnose the actual playback response/host contract without weakening E2E. Merge only after Akwam + Yacine are green and the exact WeCima degraded contract passes, then continue the highest remaining P0.
+Stay on PR #25. Inspect exact-head CI for the bounded multi-item Akwam evidence. If any sampled title resolves a real safe stream, immediately verify Yacine regression and WeCima's narrowly defined Cloudflare degraded contract, then merge only if exact-head CI is green and PR mergeable. If all bounded Akwam samples still time out, treat this as playback-host/runtime reachability evidence and diagnose the actual playback contract/headers/redirect behavior without weakening E2E or adding a bypass.
