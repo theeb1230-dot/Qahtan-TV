@@ -3,6 +3,7 @@ import { StremioContentType } from '../src/types/stremio.js';
 
 const providerId = process.argv[2];
 const query = process.argv.slice(3).join(' ') || 'مسلسل';
+const expectedDegradedReason = process.env.EXPECT_DEGRADED_REASON;
 if (!providerId) {
   console.error('usage: npm run e2e:provider -- <provider-id> [query]');
   process.exit(2);
@@ -28,6 +29,8 @@ type Evidence = {
   selectedType?: StremioContentType;
   error?: string;
   diagnostics?: Record<string, unknown>;
+  expectedDegraded?: boolean;
+  degradedReason?: string;
 };
 
 const evidence: Evidence = {
@@ -85,7 +88,7 @@ try {
 
 // When WeCima fails before discovery, capture only non-sensitive response-contract
 // facts. This distinguishes parser drift from CDN/WAF denial without logging body,
-// cookies, tokens, media URLs, or other provider data. The gate still fails normally.
+// cookies, tokens, media URLs, or other provider data.
 if (providerId === 'wecima' && evidence.status !== 'Working') {
   try {
     const response = await fetch('https://wecima.cx/', {
@@ -116,5 +119,18 @@ if (providerId === 'wecima' && evidence.status !== 'Working') {
   }
 }
 
+// A provider may be an explicit degraded runtime gate only for a narrowly proven
+// external condition. This is not a Working promotion: any different failure,
+// parser drift, partial path, or disappearance of the expected condition fails CI.
+if (expectedDegradedReason === 'cloudflare-challenge' && providerId === 'wecima' && evidence.status === 'Broken') {
+  const diagnostics = evidence.diagnostics || {};
+  const isExpectedChallenge = diagnostics.status === 403 && diagnostics.cfMitigated === 'challenge' && diagnostics.finalHost === 'wecima.cx';
+  if (isExpectedChallenge) {
+    evidence.expectedDegraded = true;
+    evidence.degradedReason = 'cloudflare-challenge';
+  }
+}
+
 console.log(JSON.stringify(evidence, null, 2));
-process.exit(evidence.status === 'Working' ? 0 : 1);
+const acceptedExpectedDegraded = evidence.expectedDegraded === true;
+process.exit(evidence.status === 'Working' || acceptedExpectedDegraded ? 0 : 1);
