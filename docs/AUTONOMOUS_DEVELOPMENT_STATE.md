@@ -1,23 +1,24 @@
 # Autonomous Development State
 
 ## Current cycle
-- Start/main SHA: `7dea83ea2bf37d651dbdfea4600b41bc43b48d35`; default branch `main`.
-- Active PR: #24 `qahtan/p0-runtime-yacine-evidence`; all work remains on this branch.
-- Exact inspected head `4e29b9f47da5b9d609a53a761dbf585b8f5e7b2f`; CI run `35494816435`: install, lint, tests, build and Akwam runtime E2E all passed; Yacine step alone failed.
-- Root cause found in CI wiring: workflow invoked `e2e:provider -- yacine`, but the registered provider id is `yacinetv`. The harness therefore failed immediately as `provider-not-registered` and never exercised Yacine runtime.
-- Fix committed on same PR: workflow now invokes `e2e:provider -- yacinetv "رياضة"`. Exact code commit `a5a36bc043748cc2b10ffeece32c29230cbcf7ef`; fresh exact-head CI pending.
-- Yacine operational APIs remain routed through DomainRegistry with no pre-seeded lastKnownGood; promotion requires HTTP 200 + decrypt + JSON/API-shape identity contract.
-- Source baseline: 3rb exact SHA `d27b00f1894a63f86786ff04939d3c76b58f6677`; explicit reuse permission is documented but not treated as a third-party license grant.
+- Start/main SHA: `1decf9126ae6737f04518045ea879cada2ec9616`; default branch `main`.
+- Active PR: #25 `qahtan/p0-runtime-wecima-evidence`; all work remains on this branch.
+- Exact inspected pre-change head `bc57a15a37ab6c7d9c7ab939df23444489767037`; CI run `35606508112` completed red. install/lint/26 tests/security-health-coalescing/build passed; Akwam runtime failed, so Yacine/WeCima were skipped.
+- Full log proved Akwam discovery=24, catalog=24, metadata=true, episodes=3, streams=0. Both playback candidates timed out after the bounded 5s budget, so concurrency removed latency amplification but did not restore a stream.
+- New root-cause correction in commit `2d526e404b4042c9efb6c26e5555d8eda1ea70d5`: the runtime harness no longer treats one arbitrary first search result as the whole provider. It tests a bounded sample of up to three distinct live items and still requires one real metadata -> episodes (for series) -> non-empty safe HTTP(S) stream path. No streams=0 waiver or degraded exception was added for Akwam.
+- Public live evidence independently confirms Akwam catalog/detail/episode pages remain present, reinforcing that the current blocker is playback availability rather than discovery/parser collapse.
+- Source baseline: 3rb exact SHA `d27b00f1894a63f86786ff04939d3c76b58f6677`; explicit reuse permission remains documented but is not treated as a third-party license grant.
 
 ## Blockers ordered by release impact
 ### P0
-1. Finish PR #24. Acceptance: exact-head CI green including Akwam regression plus a real Yacine live run through discovery/catalog, metadata and non-empty safe HTTP(S) stream resolution; PR mergeable; then merge.
-2. Continue runtime E2E evidence for remaining providers one by one; Working/Partial/Broken follows live evidence only.
-3. SyriaLive remains independent/fail-closed until its own contract is verified; never alias Yacine.
-4. `https://zx33.tuktuk-sa.online` remains quarantined until identity fingerprint, content type and parser prerequisites are proven.
-5. Complete security audit for every outbound/debug/proxy/extractor path while preserving streaming/backpressure and Range/206.
-6. Stremio manifest/catalog/meta/stream plus extractor/deobfuscation runtime regression evidence.
-7. v1.0 gate: exact release SHA CI/security green, verified failover, no hidden P0/P1, all advertised usable providers proven E2E.
+1. Akwam stream-resolution regression: exact-head CI must prove non-empty safe stream resolution after bounded concurrent fallback. No streams=0 waiver.
+2. Finish PR #25 only when Akwam and Yacine regressions are green and WeCima degraded contract is exact and green; then merge if still mergeable.
+3. Continue runtime E2E evidence for remaining providers. Working/Partial/Broken follows current live evidence only.
+4. SyriaLive remains independent/fail-closed until its own source contract is verified; never alias Yacine.
+5. `https://zx33.tuktuk-sa.online` remains quarantined until identity fingerprint, content type and parser prerequisites are proven.
+6. Complete security audit for every outbound/debug/proxy/extractor path while preserving streaming/backpressure and Range/206.
+7. Stremio manifest/catalog/meta/stream plus extractor/deobfuscation runtime regression evidence.
+8. v1.0 gate: exact release SHA CI/security green, verified failover, no hidden P0/P1, all advertised usable providers proven E2E; blocked providers remain explicitly degraded.
 
 ### P1
 - Qahtan/3rb provenance, third-party LICENSE/NOTICE, dependencies, TODO/FIXME/dead code, structured observability and error-isolation audit.
@@ -25,47 +26,66 @@
 ### P2
 - UX polish/refactor only after P0/P1 closure.
 
+## Acceptance criteria status
+- Closed: current Akwam failure localized beyond discovery/catalog/meta/episodes; serialized playback timeout amplification removed; E2E selection made bounded and resilient to a single temporarily broken live title without weakening stream requirements.
+- Open: exact-head proof that at least one bounded Akwam sample resolves a safe stream; Yacine regression; WeCima exact degraded contract; remaining provider E2E/security/release gates.
+
 ## Work performed this cycle
-- Re-read repository/default branch, exact main SHA, branches and active PR from GitHub.
-- Verified exact-head CI run `35494816435`; all static/unit/build gates and Akwam runtime regression passed, Yacine gate alone failed.
-- Audited workflow and runtime harness and found a deterministic CI defect: provider registry id `yacinetv` did not match workflow argument `yacine`.
-- Corrected the workflow on PR #24 to target the actually registered provider. This is necessary before any Yacine runtime conclusion is valid.
+- Re-read repository metadata, default branch/main SHA, all branches, open PR #25/exact head, recent commits, exact-head workflow/jobs/full logs, dependencies, CI workflow, autonomous state, Akwam provider, HTTP client, extractor router, runtime E2E harness and TODO/FIXME search.
+- Confirmed exact current failure from run `35606508112`: static/unit/build gates green; Akwam reaches a real episode but both /watch and /download candidates time out after 5s and streams remain zero.
+- Checked current public Akwam pages and confirmed catalog/detail/episode content remains live; this narrows the regression to playback endpoints/runtime reachability.
+- Changed the provider runtime harness to test up to three deduplicated live search/catalog candidates before declaring the provider Partial. Each candidate must independently satisfy metadata, episodes for series, and a non-empty safe HTTP(S) stream. This prevents a single-title outage from falsely classifying the entire provider while preserving fail-closed E2E semantics.
 
 ## CI/tests/artifacts
-- `4e29b9f...`: CI failure only at incorrectly addressed Yacine runtime step; Akwam remains green.
-- `a5a36bc043748cc2b10ffeece32c29230cbcf7ef`: CI wiring fix; fresh exact-head run pending at last inspection.
+- Pre-change exact head `bc57a15a37ab6c7d9c7ab939df23444489767037` / run `35606508112`: npm install, lint, 26/26 tests, network security, bounded response preview, provider health/circuit-breaker, in-flight coalescing and build all green; Akwam E2E failed streams=0; Yacine/WeCima skipped.
+- Code commit `2d526e404b4042c9efb6c26e5555d8eda1ea70d5`: bounded multi-item runtime evidence. No exact-head CI result was available at the final inspection, therefore it receives no runtime completion credit yet.
 - No release-ready artifact claimed.
 
+## Provider/domain health
+- Akwam: Partial on latest completed runtime evidence; discovery/catalog/meta/episodes work, playback endpoints timed out. Fix pending exact-head proof.
+- Yacine TV: last independently completed E2E evidence Working, but latest workflow did not reach its step because Akwam failed first.
+- WeCima: Broken/degraded in CI runtime due Cloudflare challenge; no compatible verified fallback promoted.
+- SyriaLive: Broken/degraded and intentionally independent/fail-closed.
+- Tuktuk candidate: quarantined; identity/content contract unproven.
+
 ## Provider runtime classification
-- Working: Akwam.
-- Partial: Yacine TV, WeCima, FaselHD, ArabSeed, Anime4Up, WitAnime, 3isk, EgyDead.
-- Broken/degraded: SyriaLive, intentionally fail-closed pending independent contract verification.
-- Quarantined: tuktuk candidate; identity/content contract unproven.
+- Working: Yacine TV.
+- Partial: Akwam, FaselHD, ArabSeed, Anime4Up, WitAnime, 3isk, EgyDead.
+- Broken: WeCima, SyriaLive.
+- Quarantined: tuktuk candidate.
 
 ## Weighted verified completion
 | Category | Weight | Verified fraction | Earned | Evidence / cap reason |
 |---|---:|---:|---:|---|
-| Repo/build/CI baseline | 5 | 0.90 | 4.5 | baseline gates and Akwam live gate proven; new exact-head pending |
+| Repo/build/CI baseline | 5 | 0.90 | 4.5 | static/unit/build green; live gate red |
 | Qahtan identity + provenance/licenses | 5 | 0.45 | 2.3 | third-party audit open |
-| DomainRegistry + identity verification + failover | 12 | 0.72 | 8.6 | implementation/integration evidence; Yacine live proof pending |
-| Provider health/circuit/ranking/cache | 10 | 0.75 | 7.5 | deterministic tests + Akwam runtime; broad proof incomplete |
+| DomainRegistry + identity verification + failover | 12 | 0.72 | 8.6 | tested implementation; broad runtime proof incomplete |
+| Provider health/circuit/ranking/cache | 10 | 0.75 | 7.5 | deterministic tests; broad runtime proof incomplete |
 | Backend/network/proxy security | 13 | 0.75 | 9.8 | tested security contracts; full outbound audit open |
-| Discovery/catalog/search coverage | 8 | 0.60 | 4.8 | Akwam live; remaining providers incomplete |
-| Metadata/details + seasons/episodes | 8 | 0.60 | 4.8 | Akwam live; remaining providers incomplete |
-| Stream resolution/extractors | 10 | 0.45 | 4.5 | Akwam live stream proven; narrow coverage |
-| End-to-end provider runtime evidence | 15 | 0.10 | 1.5 | 1/10 providers proven E2E |
+| Discovery/catalog/search coverage | 8 | 0.60 | 4.8 | Akwam discovery proven; broad provider proof incomplete |
+| Metadata/details + seasons/episodes | 8 | 0.60 | 4.8 | Akwam path proven through episodes; broad provider proof incomplete |
+| Stream resolution/extractors | 10 | 0.45 | 4.5 | Akwam latest live stream resolution regressed; broad proof incomplete |
+| End-to-end provider runtime evidence | 15 | 0.10 | 1.5 | 1/10 currently proven Working on latest applicable evidence |
 | Stremio compatibility/regression | 4 | 0.60 | 2.4 | suite green; broader live E2E absent |
-| Observability/performance/error isolation | 3 | 0.60 | 1.8 | partial tested coverage |
+| Observability/performance/error isolation | 3 | 0.60 | 1.8 | logs isolated the playback timeout mechanism |
 | Release gate/artifact/runtime readiness | 7 | 0.30 | 2.1 | no v1.0; P0/P1 remain |
 
 **Overall Verified Product Completion: 54.6%.**
 
 ## Independent completion metrics
-- Runtime-Verified Provider Completion: **1/10 = 10.0%**. Working: Akwam. Partial: Yacine TV, WeCima, FaselHD, ArabSeed, Anime4Up, WitAnime, 3isk, EgyDead. Broken/degraded: SyriaLive.
-- Release Gate Completion: **3/7 = 42.9%**. Fixed denominator seven. Proven: identity baseline, main CI baseline, tested DomainRegistry/health foundation. Unproven: complete security audit, no open P0/P1, advertised-provider E2E, exact release-SHA/artifact readiness.
+- Runtime-Verified Provider Completion: **1/10 = 10.0%**. Working: Yacine TV. Partial: Akwam, FaselHD, ArabSeed, Anime4Up, WitAnime, 3isk, EgyDead. Broken: WeCima, SyriaLive. Tuktuk remains quarantined and is not counted as a target provider.
+- Release Gate Completion: **3/7 = 42.9%**. Fixed denominator seven. Proven: identity baseline, static/build CI baseline, tested DomainRegistry/health foundation. Unproven: complete security audit, no open P0/P1, advertised-provider E2E, exact release-SHA/artifact readiness.
+- Beta Readiness: **48.0%**. Static/build foundation is strong, but current exact runtime gate is red and only one of ten target providers has current full-path proof.
 
 ## Percentage rationale
-No score increase: the latest discovery shows the previous Yacine CI failure was not runtime evidence at all because the workflow addressed a nonexistent provider id. Akwam remains the sole live E2E-proven provider. Pending code/CI receives zero extra credit.
+- Overall Verified Product Completion remains **54.6%** from fresh evidence: no new runtime credit is awarded while the new exact head is unverified. The latest completed CI still invalidates Akwam Working status.
+- Runtime remains 10.0%, Release Gate 42.9%, Beta 48.0%. The bounded multi-item harness is a correctness improvement but cannot raise completion until exact-head CI proves a real stream.
+
+## Risks / what does not work yet
+- Akwam playback may still be unreachable from GitHub-hosted networks even after removing serialized timeout amplification; exact-head runtime proof is required.
+- WeCima is not usable from the GitHub-hosted runner because `wecima.cx` returns a Cloudflare managed challenge.
+- SyriaLive independent contract remains unproven; Tuktuk remains quarantined.
+- Full security/outbound audit, broad Stremio/extractor runtime regression, P1 licensing/dependency audit and release artifact gate remain open.
 
 ## Next target
-Stay on PR #24. Inspect fresh exact-head CI for `a5a36bc...`. If the correctly addressed Yacine run fails, fix the first real runtime failure on this branch without weakening Akwam or security gates. Merge only on exact-head green + mergeable.
+Stay on PR #25. Inspect exact-head CI for the bounded multi-item Akwam evidence. If any sampled title resolves a real safe stream, immediately verify Yacine regression and WeCima's narrowly defined Cloudflare degraded contract, then merge only if exact-head CI is green and PR mergeable. If all bounded Akwam samples still time out, treat this as playback-host/runtime reachability evidence and diagnose the actual playback contract/headers/redirect behavior without weakening E2E or adding a bypass.
