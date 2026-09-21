@@ -25,13 +25,23 @@ export class FaselhdProvider extends BaseProvider {
   private identityVerified($: any): boolean {
     const title = $('title').text().toLowerCase();
     const generator = $('meta[name="generator"]').attr('content')?.toLowerCase() || '';
-    // The current canonical site exposes content as /video/... and playback as
-    // /embed/<id>/. Keep legacy selectors for older canonical pages, but do not
-    // accept the unrelated watch.php fallback contract until it has its own adapter.
     const hasCanonicalContract = $('a[href*="/video/"], iframe[src*="/embed/"], iframe[data-src*="/embed/"]').length > 0;
     const hasLegacyCanonicalShape = $('div.postDiv, #episodes, .posterImg, iframe[name="player_iframe"], .serversList').length > 0;
     const hasBrand = title.includes('fasel') || title.includes('فاصل') || generator.includes('wordpress');
     return hasBrand && (hasCanonicalContract || hasLegacyCanonicalShape);
+  }
+
+  private async verifyCanonicalDomain(baseUrl: string): Promise<boolean> {
+    // Search/category pages may legitimately contain zero matching cards. Identity is
+    // therefore established from the canonical landing contract, never from HTTP 200
+    // alone and never from the incompatible watch.php fallback.
+    if (new URL(baseUrl).hostname !== new URL(this.mainUrl).hostname) return false;
+    try {
+      const landing = await this.http.get(`${baseUrl}/`, { headers: { 'User-Agent': MOBILE_USER_AGENT } });
+      return this.identityVerified(landing.$);
+    } catch {
+      return false;
+    }
   }
 
   private parseItems($: any, baseUrl: string, forcedType?: StremioContentType): ProviderItem[] {
@@ -49,8 +59,6 @@ export class FaselhdProvider extends BaseProvider {
       const a = $(el).find('a').first();
       push(a.attr('href'), $(el).find('.h1, h1, .post-title').first().text().trim() || a.attr('title'), $(el).find('img').attr('data-src') || $(el).find('img').attr('src'));
     });
-    // Current canonical layout no longer consistently uses postDiv. Restrict the
-    // generic path to canonical /video/ links so navigation/tag links never become items.
     $('a[href*="/video/"]').each((_: any, el: any) => {
       const a = $(el); const img = a.find('img').first();
       push(a.attr('href'), a.attr('title') || img.attr('alt') || a.text().trim(), img.attr('data-src') || img.attr('src'));
@@ -60,16 +68,20 @@ export class FaselhdProvider extends BaseProvider {
 
   async searchInternal(query: string): Promise<ProviderItem[]> {
     return this.withHealthyDomain(async (baseUrl) => {
+      const identityVerified = await this.verifyCanonicalDomain(baseUrl);
+      if (!identityVerified) return { value: [], identityVerified: false };
       const resp = await this.http.get(`${baseUrl}/?s=${encodeURIComponent(query)}`, { headers: { 'User-Agent': MOBILE_USER_AGENT } });
-      return { value: this.parseItems(resp.$, baseUrl), identityVerified: this.identityVerified(resp.$) };
+      return { value: this.parseItems(resp.$, baseUrl), identityVerified: true };
     });
   }
 
   async getCatalogInternal(type: StremioContentType, page = 1): Promise<ProviderItem[]> {
     return this.withHealthyDomain(async (baseUrl) => {
+      const identityVerified = await this.verifyCanonicalDomain(baseUrl);
+      if (!identityVerified) return { value: [], identityVerified: false };
       const path = type === 'anime' ? 'anime' : type === 'series' ? 'series' : 'movies';
       const resp = await this.http.get(`${baseUrl}/${path}${page > 1 ? `/page/${page}` : ''}`);
-      return { value: this.parseItems(resp.$, baseUrl, type), identityVerified: this.identityVerified(resp.$) };
+      return { value: this.parseItems(resp.$, baseUrl, type), identityVerified: true };
     });
   }
 
