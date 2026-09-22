@@ -60,12 +60,34 @@ async function safePageDiagnostics(url: string): Promise<Record<string, unknown>
   try {
     const response = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36', Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8' }, redirect: 'follow', signal: AbortSignal.timeout(15000) });
     const html = await response.text(); const title = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim() || '';
-    return { status: response.status, finalHost: new URL(response.url).hostname, contentType: response.headers.get('content-type')?.split(';')[0] || null, bodyBytes: Buffer.byteLength(html), title: title.slice(0, 160), brandFingerprint: /arab\s*seed|arabseed|عرب\s*سيد/i.test(html), categoryFilms: (html.match(/href=["'][^"']*\/category\/films/gi) || []).length, categoryTv: (html.match(/href=["'][^"']*\/category\/tv/gi) || []).length, watchLinks: (html.match(/href=["'][^"']*\/watch\//gi) || []).length, seriesLinks: (html.match(/href=["'][^"']*\/selary\//gi) || []).length };
+    return {
+      status: response.status,
+      finalHost: new URL(response.url).hostname,
+      contentType: response.headers.get('content-type')?.split(';')[0] || null,
+      cfMitigated: response.headers.get('cf-mitigated') || null,
+      accessChallengeFingerprint: /just a moment|cf-chl-|challenge-platform|cloudflare/i.test(html),
+      bodyBytes: Buffer.byteLength(html),
+      title: title.slice(0, 160),
+      brandFingerprint: /arab\s*seed|arabseed|عرب\s*سيد/i.test(html),
+      categoryFilms: (html.match(/href=["'][^"']*\/category\/films/gi) || []).length,
+      categoryTv: (html.match(/href=["'][^"']*\/category\/tv/gi) || []).length,
+      watchLinks: (html.match(/href=["'][^"']*\/watch\//gi) || []).length,
+      seriesLinks: (html.match(/href=["'][^"']*\/selary\//gi) || []).length,
+    };
   } catch (error) { return { requestError: (error as Error).message }; }
 }
 
 if (providerId === 'arabseed' && evidence.status !== 'Working') {
-  evidence.diagnostics = { home: await safePageDiagnostics('https://www.arabseed.wine/'), films: await safePageDiagnostics('https://www.arabseed.wine/category/films/'), tv: await safePageDiagnostics('https://www.arabseed.wine/category/tv/') };
+  const home = await safePageDiagnostics('https://www.arabseed.wine/');
+  const films = await safePageDiagnostics('https://www.arabseed.wine/category/films/');
+  const tv = await safePageDiagnostics('https://www.arabseed.wine/category/tv/');
+  const blockedPaths = [films, tv].filter((page) => page.status === 403 && (page.cfMitigated === 'challenge' || page.accessChallengeFingerprint === true)).length;
+  evidence.diagnostics = {
+    home,
+    films,
+    tv,
+    accessClassification: home.status === 200 && blockedPaths === 2 ? 'home-reachable-category-paths-challenged' : 'unclassified',
+  };
 }
 
 if (providerId === 'wecima' && evidence.status !== 'Working') {
