@@ -25,9 +25,6 @@ export class ArabseedProvider extends BaseProvider {
     } catch { return false; }
   }
   private hasIdentity(resp: Awaited<ReturnType<HttpClient['get']>>): boolean {
-    // Identity must come from the document contract, not just visible body text. The live
-    // WordPress theme can render the ArabSeed brand in title/meta/logo attributes while the
-    // body text itself contains only catalog copy. Require both brand and a parser prerequisite.
     const html = resp.$.html();
     const title = resp.$('title').text();
     const meta = resp.$('meta[property="og:site_name"],meta[property="og:title"],meta[name="application-name"]').map((_, el) => resp.$(el).attr('content') || '').get().join(' ');
@@ -52,6 +49,7 @@ export class ArabseedProvider extends BaseProvider {
       const img = a.find('img').first().length ? a.find('img').first() : container.find('img').first();
       const poster = this.fixUrl(img.attr('data-src') || img.attr('src'), origin);
       const inferred: StremioContentType = /(مسلسل|الحلقة|الموسم)/.test(context) ? 'series' : 'movie';
+      if (type && inferred !== type) return;
       items.push({ id: this.formatId(absolute), provider: this.name, type: type || inferred, title, poster, url: absolute });
     });
     return items;
@@ -61,10 +59,15 @@ export class ArabseedProvider extends BaseProvider {
     return this.withHealthyDomain(async (baseUrl) => {
       const candidates = [`${baseUrl}/?s=${encodeURIComponent(query)}`, `${baseUrl}/find/?find=${encodeURIComponent(query)}`];
       for (const url of candidates) {
-        const resp = await this.http.get(url); const identity = this.hasIdentity(resp); const items = this.parseItems(resp, undefined, baseUrl);
-        if (identity && items.length) return { value: items, identityVerified: true };
+        try {
+          const resp = await this.http.get(url); const identity = this.hasIdentity(resp); const items = this.parseItems(resp, undefined, baseUrl);
+          if (identity && items.length) return { value: items, identityVerified: true };
+        } catch (error) { this.logger.debug(`ArabSeed search endpoint unavailable: ${(error as Error).message}`); }
       }
-      return { value: [], identityVerified: false };
+      // A challenged search endpoint must not poison domain health when the verified home
+      // contract is still reachable. Return no search hits and let callers use catalog fallback.
+      const home = await this.http.get(`${baseUrl}/`);
+      return { value: [], identityVerified: this.hasIdentity(home) };
     });
   }
 
@@ -72,9 +75,20 @@ export class ArabseedProvider extends BaseProvider {
     return this.withHealthyDomain(async (baseUrl) => {
       const category = type === 'series' ? 'tv' : 'films';
       const suffix = page > 1 ? `/page/${page}/` : '/';
-      const resp = await this.http.get(`${baseUrl}/category/${category}${suffix}`);
-      const items = this.parseItems(resp, type, baseUrl);
-      return { value: items, identityVerified: this.hasIdentity(resp) && items.length > 0 };
+      try {
+        const resp = await this.http.get(`${baseUrl}/category/${category}${suffix}`);
+        const items = this.parseItems(resp, type, baseUrl);
+        if (this.hasIdentity(resp) && items.length > 0) return { value: items, identityVerified: true };
+      } catch (error) { this.logger.debug(`ArabSeed category endpoint unavailable: ${(error as Error).message}`); }
+
+      // Hosted runners can reach the verified ArabSeed home document while Cloudflare challenges
+      // /category/* paths. The home page is a first-party catalog surface, so parse it as a bounded
+      // fail-closed fallback rather than bypassing the challenge. Page > 1 has no equivalent home
+      // surface and therefore remains empty.
+      if (page > 1) return { value: [], identityVerified: false };
+      const home = await this.http.get(`${baseUrl}/`);
+      const items = this.parseItems(home, type, baseUrl);
+      return { value: items, identityVerified: this.hasIdentity(home) && items.length > 0 };
     });
   }
 
