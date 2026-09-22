@@ -18,7 +18,10 @@ export class Anime4upProvider extends BaseProvider {
   private fixUrl(url?: string, baseUrl = this.mainUrl): string {
     if (!url) return '';
     if (url.startsWith('//')) return `https:${url}`;
-    if (!url.startsWith('http')) return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+    if (!url.startsWith('http')) {
+      const origin = this.originFor(baseUrl);
+      return `${origin}${url.startsWith('/') ? '' : '/'}${url}`;
+    }
     return url;
   }
 
@@ -29,35 +32,67 @@ export class Anime4upProvider extends BaseProvider {
   private parseItems(resp: Awaited<ReturnType<HttpClient['get']>>, type?: StremioContentType, baseUrl = this.mainUrl): ProviderItem[] {
     const items: ProviderItem[] = [];
     const seen = new Set<string>();
-    resp.$('div.anime-card-container').each((_, el) => {
-      const a = resp.$(el).find('.anime-title a');
-      const title = a.text().trim();
-      const href = a.attr('href');
+    const push = (title: string, href?: string, poster?: string) => {
       if (!title || !href) return;
       const absolute = this.fixUrl(href, baseUrl);
-      if (seen.has(absolute)) return;
+      if (!absolute.includes('/anime/') || seen.has(absolute)) return;
       seen.add(absolute);
-      const poster = this.fixUrl(resp.$(el).find('img').attr('data-src') || resp.$(el).find('img').attr('src'), baseUrl);
       const inferred: StremioContentType = title.includes('فيلم') || href.includes('/movie/') ? 'movie' : 'anime';
-      items.push({ id: this.formatId(absolute), provider: this.name, type: type || inferred, title, poster, url: absolute });
+      items.push({ id: this.formatId(absolute), provider: this.name, type: type || inferred, title, poster: this.fixUrl(poster, baseUrl), url: absolute });
+    };
+
+    resp.$('div.anime-card-container').each((_, el) => {
+      const a = resp.$(el).find('.anime-title a');
+      push(a.text().trim(), a.attr('href'), resp.$(el).find('img').attr('data-src') || resp.$(el).find('img').attr('src'));
+    });
+
+    // Current 2026 home/search markup also exposes canonical /anime/ links outside
+    // the legacy anime-card-container. Keep discovery tied to canonical first-party
+    // item URLs rather than a brittle presentation class.
+    resp.$('a[href*="/anime/"]').each((_, el) => {
+      const a = resp.$(el);
+      const container = a.closest('article, div, li');
+      const title = (a.attr('title') || a.find('h2,h3,h4').first().text() || a.text()).trim();
+      const img = container.find('img').first();
+      push(title, a.attr('href'), img.attr('data-src') || img.attr('src'));
     });
     return items;
   }
 
+  private hasIdentity(resp: Awaited<ReturnType<HttpClient['get']>>, items: ProviderItem[]): boolean {
+    const title = (resp.$('title').text() || resp.$('h1').first().text()).toLowerCase();
+    return (title.includes('anime4up') || title.includes('انمي فور اب') || title.includes('أنمي فور اب')) && items.length > 0;
+  }
+
   async searchInternal(query: string): Promise<ProviderItem[]> {
     return this.withHealthyDomain(async (baseUrl) => {
-      const resp = await this.http.get(`${baseUrl}/?search_string=${encodeURIComponent(query)}`, { headers: { 'User-Agent': MOBILE_USER_AGENT } });
-      const items = this.parseItems(resp, undefined, baseUrl);
-      return { value: items, identityVerified: items.length > 0 };
+      const origin = this.originFor(baseUrl);
+      const search = await this.http.get(`${origin}/?search_string=${encodeURIComponent(query)}`, { headers: { 'User-Agent': MOBILE_USER_AGENT } });
+      let items = this.parseItems(search, undefined, origin);
+      let identityVerified = this.hasIdentity(search, items);
+      if (items.length === 0) {
+        const home = await this.http.get(baseUrl, { headers: { 'User-Agent': MOBILE_USER_AGENT } });
+        const tokens = query.toLocaleLowerCase().split(/\s+/).filter(Boolean);
+        items = this.parseItems(home, undefined, origin).filter((item) => tokens.every((token) => item.title.toLocaleLowerCase().includes(token)));
+        identityVerified = this.hasIdentity(home, this.parseItems(home, undefined, origin));
+      }
+      return { value: items, identityVerified };
     });
   }
 
   async getCatalogInternal(type: StremioContentType, page = 1): Promise<ProviderItem[]> {
     return this.withHealthyDomain(async (baseUrl) => {
+      const origin = this.originFor(baseUrl);
       const path = type === 'movie' ? 'anime-type/movie' : 'anime-season';
-      const resp = await this.http.get(`${baseUrl}/${path}/page/${page}/`, { headers: { 'User-Agent': MOBILE_USER_AGENT } });
-      const items = this.parseItems(resp, type, baseUrl);
-      return { value: items, identityVerified: items.length > 0 };
+      const resp = await this.http.get(`${origin}/${path}/page/${page}/`, { headers: { 'User-Agent': MOBILE_USER_AGENT } });
+      let items = this.parseItems(resp, type, origin);
+      let identityVerified = this.hasIdentity(resp, items);
+      if (items.length === 0 && page === 1) {
+        const home = await this.http.get(baseUrl, { headers: { 'User-Agent': MOBILE_USER_AGENT } });
+        items = this.parseItems(home, type, origin);
+        identityVerified = this.hasIdentity(home, items);
+      }
+      return { value: items, identityVerified };
     });
   }
 
