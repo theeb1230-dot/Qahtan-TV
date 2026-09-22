@@ -3,18 +3,17 @@
 ## Current cycle
 - Start/end main SHA: `003f167613133054c4e08e257830822c012e0560`; default branch `main`.
 - Single active PR: #26 `qahtan/p0-runtime-faselhd-evidence`; mergeable at inspection.
-- Cycle-start PR head: `d73307e6e0cef858bc20321e9befd1426db09755`.
-- Exact-head CI run `35704850177` completed red: install, lint, tests, build, Akwam E2E, Yacine E2E and exact WeCima degraded contract passed; ArabSeed failed; FaselHD was skipped by fail-fast ordering.
-- This cycle removes that evidence blind spot without weakening acceptance: ArabSeed and FaselHD runtime steps now collect independent outcomes with `continue-on-error`, followed by an unconditional aggregate strict gate that fails unless both outcomes are `success`. This is evidence collection, not a waiver.
-- Code/workflow commit: `51136a65657ede227a046393e7fe806d2256420a`.
-- FaselHD remains externally blocked in prior hosted evidence by HTTP 403 on both registered origins; the new workflow will now re-test it even when ArabSeed fails.
-- ArabSeed remains unverified through stream. Prior evidence showed its first-party home identity reachable while category paths were challenged from hosted CI; no challenge bypass is permitted or implemented.
+- Cycle-start PR head: `5d7b528b0b1ecace77978f5a50536817cf5067f9`.
+- Exact-head CI run `35711212046` completed red. Install, lint, tests, build, Akwam E2E, Yacine E2E and the exact WeCima degraded contract all passed. Both ArabSeed and FaselHD runtime collection steps executed; the old combined aggregate strict gate failed.
+- The combined aggregate proved at least one of ArabSeed/FaselHD failed but GitHub step metadata could not identify which provider because both collection steps use `continue-on-error`. This cycle replaces that opaque aggregate with two independent strict require steps, both `if: always()`, so GitHub step conclusions identify ArabSeed and FaselHD separately while either failure still keeps the job red.
+- Workflow commit: `7956e49f34e8bbdc72c32ea66a9d081ec17aecab`.
+- No provider is promoted from the workflow change itself; exact-head runtime evidence remains required.
 - Source baseline: 3rb SHA `d27b00f1894a63f86786ff04939d3c76b58f6677`; reuse permission is provenance only, not a third-party license grant.
 
 ## Blockers
 ### P0
 1. ArabSeed E2E: prove search/catalog -> meta/details -> safe non-empty stream, then series/episodes capability before full Working classification.
-2. FaselHD E2E: re-collect strict runtime evidence independently; prior hosted evidence was external HTTP 403.
+2. FaselHD E2E: prove strict runtime independently; prior hosted evidence showed external HTTP 403 on registered origins.
 3. Anime4Up, WitAnime, 3isk, EgyDead E2E individually.
 4. SyriaLive independent source/contract proof or remain Broken/degraded.
 5. Tuktuk candidate quarantine investigation.
@@ -31,12 +30,12 @@ UX/polish only after P0/P1.
 ## Acceptance criteria
 - Closed from current evidence: Akwam real safe stream path; Yacine runtime regression; exact WeCima Cloudflare-only degraded contract; tested DomainRegistry/provider-health foundation.
 - Open: ArabSeed full stream proof and series/episodes proof; FaselHD full E2E; later provider runtime gates; security/Stremio/release gates.
-- CI provider evidence must not be hidden by an earlier independent provider failure. The aggregate gate remains red if either ArabSeed or FaselHD fails.
+- CI must expose independent provider outcomes without weakening strict acceptance. Either ArabSeed or FaselHD failure keeps the job red.
 
 ## CI / tests / artifacts
-- Run `35704850177` on `d73307e6...`: install/lint/tests/build green; Akwam Working E2E; Yacine Working E2E; WeCima exact Cloudflare degraded contract accepted; ArabSeed red; FaselHD skipped by old fail-fast ordering.
-- `51136a65657ede227a046393e7fe806d2256420a`: workflow now always executes both ArabSeed and FaselHD and aggregates their outcomes strictly.
-- Exact-head CI for the new workflow was not yet available at this state update; no runtime credit is granted from the workflow change itself.
+- Run `35711212046` on `5d7b528b...`: install/lint/tests/build green; Akwam Working E2E green; Yacine Working E2E green; WeCima exact Cloudflare degraded contract accepted; ArabSeed and FaselHD collection steps both executed; combined strict gate red.
+- `7956e49f34e8bbdc72c32ea66a9d081ec17aecab`: split the opaque combined aggregate into independent `P0 require ArabSeed runtime success` and `P0 require FaselHD runtime success` steps, both always evaluated.
+- Exact-head CI for `7956e49f...` was not yet available at this state update; no runtime credit is granted from the workflow change.
 - Releases/artifacts: none release-ready.
 
 ## Provider/domain health
@@ -70,10 +69,11 @@ UX/polish only after P0/P1.
 **D) Beta Readiness: 55.0%.** Broad provider/runtime and release gates remain open.
 
 ## Risks / what does not work
-- ArabSeed remains red on latest completed exact-head CI; no Working promotion.
-- FaselHD was hidden by fail-fast in that run; the workflow fix removes this blind spot but does not waive its strict E2E requirement.
+- At least one of ArabSeed/FaselHD failed strict runtime on run `35711212046`; the old aggregate did not expose which one through step conclusions. The workflow now fixes that evidence ambiguity without a waiver.
+- ArabSeed is not Working until full stream and series/episodes capability are proven.
+- FaselHD has prior external-403 evidence and remains unverified until a strict E2E succeeds.
 - WeCima remains unusable from hosted runtime due its specifically verified Cloudflare challenge; SyriaLive independence remains unproven.
 - Security closure, broad Stremio/extractor runtime proof, licensing/dependency audit and release artifacts remain open.
 
 ## Next target
-Stay on PR #26. Read exact-head CI after `51136a65657...`; it must now expose both ArabSeed and FaselHD outcomes in the same run while keeping the aggregate gate strict. Fix the first actionable code defect shown by that evidence. If FaselHD remains external-403 and ArabSeed remains blocked, continue to the next independent provider proof without promoting either. Keep all provider promotion identity-verified and fail-closed.
+Stay on PR #26. Read exact-head CI after `7956e49f...`; the two independent require steps must reveal exactly whether ArabSeed, FaselHD, or both fail while keeping CI strict. Fix the first actionable code defect shown by that evidence. If failures are external access blocks rather than code defects, keep those providers unverified and advance to the next independent provider E2E proof without promotion or waiver.
