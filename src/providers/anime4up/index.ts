@@ -57,9 +57,6 @@ export class Anime4upProvider extends BaseProvider {
   }
 
   private hasIdentity(resp: Awaited<ReturnType<HttpClient['get']>>, items: ProviderItem[]): boolean {
-    // Search/archive responses do not consistently repeat the brand in <title>.
-    // Verify both a first-party brand fingerprint anywhere in the document and
-    // the parser prerequisite (canonical /anime/ items) before accepting a domain.
     const title = (resp.$('title').text() || resp.$('h1').first().text()).toLowerCase();
     const documentText = resp.$('body').text().replace(/\s+/g, ' ').toLowerCase();
     const brandFingerprint = title.includes('anime4up') || title.includes('انمي فور اب') || title.includes('أنمي فور اب') ||
@@ -104,19 +101,22 @@ export class Anime4upProvider extends BaseProvider {
     const fullUrl = this.fixUrl(contentId);
     const origin = this.originFor(fullUrl);
     const resp = await this.http.get(fullUrl, { headers: { 'User-Agent': MOBILE_USER_AGENT } });
-    const title = resp.$('h1.anime-details-title').text().trim() || resp.$('meta[property="og:title"]').attr('content') || 'Anime Title';
+    const title = resp.$('h1.anime-details-title').text().trim() || resp.$('h1').first().text().trim() || resp.$('meta[property="og:title"]').attr('content') || 'Anime Title';
     const poster = this.fixUrl(resp.$('.anime-thumbnail img').attr('src') || resp.$('meta[property="og:image"]').attr('content'), origin);
-    const description = resp.$('p.anime-story').text().trim();
+    const description = resp.$('p.anime-story').text().trim() || resp.$('meta[name="description"]').attr('content') || '';
     const episodes: ProviderEpisode[] = [];
-    resp.$('div.episodes-card-container, div.DivEpisodesContainer a').each((idx, el) => {
+    const seenEpisodes = new Set<string>();
+    resp.$('div.episodes-card-container a, div.DivEpisodesContainer a, a[href*="/episode/"]').each((idx, el) => {
       const a = resp.$(el).is('a') ? resp.$(el) : resp.$(el).find('a');
       const epHref = a.attr('href');
-      const epTitle = a.text().trim() || `الحلقة ${idx + 1}`;
       if (!epHref) return;
-      const epNumMatch = epTitle.match(/(\d+)/);
-      const epNum = epNumMatch ? parseInt(epNumMatch[1], 10) : idx + 1;
       const absolute = this.fixUrl(epHref, origin);
-      episodes.push({ id: this.formatId(absolute), title: epTitle, season: 1, episode: epNum, url: absolute, poster });
+      if (!absolute.includes('/episode/') || seenEpisodes.has(absolute)) return;
+      seenEpisodes.add(absolute);
+      const contextText = `${a.attr('title') || ''} ${a.text()} ${a.closest('article,div,li').text()}`.replace(/\s+/g, ' ').trim();
+      const epNumMatch = contextText.match(/(?:الحلقة|episode)\s*(?:الخاصة\s*)?(\d+)/i) || absolute.match(/(?:episode|الحلقة)[^0-9]*(\d+)/i);
+      const epNum = epNumMatch ? parseInt(epNumMatch[1], 10) : idx + 1;
+      episodes.push({ id: this.formatId(absolute), title: contextText || `الحلقة ${epNum}`, season: 1, episode: epNum, url: absolute, poster });
     });
     return { id: this.formatId(fullUrl), provider: this.name, type: type === 'movie' ? 'movie' : 'anime', title, poster, description, url: fullUrl, episodes: episodes.length > 0 ? episodes : undefined };
   }
@@ -127,8 +127,8 @@ export class Anime4upProvider extends BaseProvider {
     const resp = await this.http.get(fullUrl, { headers: { 'User-Agent': MOBILE_USER_AGENT, Referer: fullUrl } });
     const streams: ResolvedStream[] = [];
     const serverLinks = new Set<string>();
-    resp.$('ul#episode-servers li a, div.server-item a').each((_, a) => {
-      let dataUrl = resp.$(a).attr('data-ep-url') || resp.$(a).attr('data-url') || resp.$(a).attr('href');
+    resp.$('ul#episode-servers li a, div.server-item a, [data-ep-url], [data-url]').each((_, el) => {
+      let dataUrl = resp.$(el).attr('data-ep-url') || resp.$(el).attr('data-url') || resp.$(el).attr('href');
       if (!dataUrl) return;
       if (!dataUrl.startsWith('http') && dataUrl.length > 20) {
         const decoded = safeBase64Decode(dataUrl);
