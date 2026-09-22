@@ -3,22 +3,21 @@
 ## Current cycle
 - Start/end main SHA: `003f167613133054c4e08e257830822c012e0560`; default branch `main`.
 - Single active PR: #26 `qahtan/p0-runtime-faselhd-evidence`; mergeable at inspection.
-- Cycle-start PR head: `443cfbab26aa95cd7ab7008fbcdcae7af01cf9b7`.
-- Exact-head CI run `35754162973` completed red. Install, lint, tests, build, Akwam E2E, Yacine E2E and the exact WeCima degraded contract passed. Independent strict require gates prove ArabSeed, FaselHD, Anime4Up, WitAnime, 3isk and EgyDead all failed runtime acceptance on this head.
-- Fresh first-party Anime4Up evidence confirms the canonical origin redirects to `/home8/`, the live catalog exposes `/anime/` items, detail pages expose episodes, and episode pages expose multiple playback servers. The remaining stream parser only accepted absolute legacy server URLs. Commit `a6ebeb3d62849815f77f53556e5281a4bb09ace9` now normalizes protocol-relative and same-origin player URLs and also feeds first-party iframe sources into the generic extractor, while retaining safe HTTP(S)-only output.
+- Cycle-start PR head: `3c74669a418a239c62a3b6b8c74f72030a672a00`.
+- Exact-head CI run `35760956034` on that head completed red. Install, lint, tests, build, Akwam E2E, Yacine E2E and the exact WeCima degraded contract passed. Strict require gates for ArabSeed, FaselHD, Anime4Up, WitAnime, 3isk and EgyDead all failed.
+- P0-10 root-layer work: commit `9e2231c8a4ac28e839b3674ffccb389f66695fb5` strengthens the generic extractor instead of adding another provider-only patch. It resolves relative/protocol-relative media URLs, recognizes `video[src]`, extracts both HLS and MP4 from scripts/unpacked players, and follows nested HTTP(S) iframes with bounded depth=2, max 6 iframes/page and cycle prevention. Exact-head CI is pending, so no runtime completion credit is granted yet.
 - Source baseline: 3rb SHA `d27b00f1894a63f86786ff04939d3c76b58f6677`; reuse permission is provenance only, not a third-party license grant.
 
 ## Blockers
 ### P0
-1. Anime4Up exact-head E2E after player URL/iframe normalization; acceptance remains search/catalog -> meta -> episodes -> safe non-empty stream.
-2. ArabSeed E2E: strict runtime fails; prove full movie and series/episodes capability before Working.
-3. FaselHD E2E: strict runtime fails; prior hosted evidence includes external HTTP 403 on registered origins.
-4. WitAnime, 3isk, EgyDead strict runtime failures require provider-specific diagnosis.
-5. SyriaLive independent source/contract proof or remain Broken/degraded.
-6. Tuktuk candidate remains quarantined pending identity/content/parser proof.
-7. Stream/extractor and backend security closure: SSRF, redirects, DNS rebinding, URL credentials/schemes, isolation, limits, CORS, PORT, streaming backpressure and Range/206.
-8. Stremio manifest -> catalog -> meta -> stream live regression.
-9. Beta then v1.0 release gates.
+1. Exact-head E2E after generic nested-iframe/media extractor strengthening; acceptance remains safe non-empty stream, with no waiver.
+2. ArabSeed and FaselHD full E2E.
+3. Anime4Up/WitAnime/3isk/EgyDead full E2E and evidence-based classification.
+4. SyriaLive independent source/contract proof or remain Broken/degraded.
+5. Tuktuk candidate remains quarantined pending identity/content/parser proof.
+6. Backend security closure: SSRF, redirects, DNS rebinding, URL credentials/schemes, cookie isolation, limits, production CORS/PORT, streaming backpressure and Range/206.
+7. Stremio manifest -> catalog -> meta -> stream live regression.
+8. Beta then v1.0 release gates.
 
 ### P1
 Qahtan/3rb provenance and third-party LICENSE/NOTICE audit; dependencies; TODO/FIXME/dead code; structured observability/metrics; caching/performance/error isolation.
@@ -27,17 +26,17 @@ Qahtan/3rb provenance and third-party LICENSE/NOTICE audit; dependencies; TODO/F
 UX/polish only after P0/P1.
 
 ## Acceptance criteria
-- Closed from current evidence: Akwam real safe stream path; Yacine runtime regression; exact WeCima Cloudflare-only degraded contract; tested DomainRegistry/provider-health foundation.
-- Open: ArabSeed full stream plus series/episodes proof; FaselHD full E2E; Anime4Up/WitAnime/3isk/EgyDead full E2E; security/Stremio/release gates.
-- No `streams=0` waiver. `continue-on-error` is used only to collect all provider evidence in one run; each provider has a separate strict require step and any failure keeps CI red.
+- Closed from current completed evidence: Akwam real safe stream path; Yacine runtime regression; exact WeCima Cloudflare-only degraded contract; tested DomainRegistry/provider-health foundation.
+- Open: ArabSeed/FaselHD/Anime4Up/WitAnime/3isk/EgyDead full E2E; remaining security/Stremio/release gates.
+- No `streams=0` waiver. `continue-on-error` only collects evidence; separate strict require steps keep CI red on provider failure.
 
 ## CI / tests / artifacts
-- Run `35754162973` on `443cfbab26aa95cd7ab7008fbcdcae7af01cf9b7`: install/lint/tests/build green; Akwam Working E2E green; Yacine Working E2E green; WeCima exact degraded contract green; ArabSeed/FaselHD/Anime4Up/WitAnime/3isk/EgyDead strict require gates red.
-- Commit `a6ebeb3d62849815f77f53556e5281a4bb09ace9`: Anime4Up player URL normalization and iframe-source extraction. Exact-head CI pending at state update, therefore no runtime completion credit yet.
+- Run `35760956034` on `3c74669a418a239c62a3b6b8c74f72030a672a00`: install/lint/tests/build green; Akwam Working E2E green; Yacine Working E2E green; WeCima exact degraded contract green; six strict provider require gates red.
+- Commit `9e2231c8a4ac28e839b3674ffccb389f66695fb5`: generic extractor nested iframe/relative media closure. Exact-head CI pending at state update.
 - Releases/artifacts: none release-ready.
 
 ## Provider/domain health
-- Working on current completed runtime evidence: Akwam, Yacine TV.
+- Working on completed runtime evidence: Akwam, Yacine TV.
 - Partial/unverified: ArabSeed, FaselHD, Anime4Up, WitAnime, 3isk, EgyDead.
 - Broken/degraded: WeCima (verified Cloudflare challenge only), SyriaLive.
 - Quarantined and excluded from ten-provider denominator: Tuktuk candidate.
@@ -67,10 +66,10 @@ UX/polish only after P0/P1.
 **D) Beta Readiness: 55.0%.** Broad provider/runtime and release gates remain open.
 
 ## Risks / what does not work
-- Six strict provider gates remain red on completed exact-head run `35754162973`; none is promoted without full stream evidence.
-- Anime4Up first-party content is live and exposes multiple player servers, but player URL normalization/iframe extraction is not credited until exact-head E2E passes.
+- Six strict provider gates remain red on the latest completed exact-head run; none is promoted without full stream evidence.
+- Generic extractor strengthening is intentionally uncredited until its exact-head CI/runtime evidence completes.
 - WeCima remains unusable from hosted runtime due its specifically verified Cloudflare challenge; SyriaLive independence remains unproven.
-- Security closure, broad Stremio/extractor runtime proof, licensing/dependency audit and release artifacts remain open.
+- Security closure, Stremio runtime proof, licensing/dependency audit and release artifacts remain open.
 
 ## Next target
-Stay on PR #26. Read exact-head CI after Anime4Up player URL/iframe normalization. If Anime4Up reaches safe non-empty stream, promote it only from that evidence; otherwise diagnose the next exact stage. Continue with the highest actionable defect among WitAnime/3isk/EgyDead, while external access blocks remain degraded rather than waived. Then continue security and Stremio P0 gates.
+Stay on PR #26. Read exact-head CI after generic extractor strengthening. Promote any provider only if discovery/catalog -> metadata -> episodes when applicable -> safe non-empty stream passes. Otherwise use the new exact failure stage to fix the highest shared extractor/provider defect, then continue backend security and Stremio P0 gates.
