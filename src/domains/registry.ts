@@ -13,7 +13,9 @@ const baseConfigs: Record<string, ProviderDomainConfig> = {
   // fasel-hd.com currently challenges hosted automation while fasel-hd.co exposes the live FaselHD catalog contract.
   // Keep the challenged origin only as a fallback; it still requires the provider's identity/parser proof before promotion.
   faselhd:{providerId:'faselhd',primary:'https://www.fasel-hd.co',fallbacks:['https://www.fasel-hd.com'],candidates:[],lastKnownGood:null,health:'unknown',lastCheckedAt:null,identityHints:['fasel','فاصل']},
-  arabseed:{providerId:'arabseed',primary:'https://www.arabseed.wine/home/',fallbacks:[],candidates:[],lastKnownGood:'https://www.arabseed.wine/home/',health:'unknown',lastCheckedAt:null,identityHints:['arabseed','عرب سيد']},
+  // Keep only the canonical origin here. The old /home/ suffix caused provider paths such as
+  // /find and /category to be composed against a stale path contract. Promotion remains runtime-verified.
+  arabseed:{providerId:'arabseed',primary:'https://www.arabseed.wine',fallbacks:[],candidates:[],lastKnownGood:null,health:'unknown',lastCheckedAt:null,identityHints:['arabseed','عرب سيد']},
   anime4up:{providerId:'anime4up',primary:'https://w1.anime4up.rest/home8/',fallbacks:[],candidates:[],lastKnownGood:'https://w1.anime4up.rest/home8/',health:'unknown',lastCheckedAt:null,identityHints:['anime4up']},
   witanime:{providerId:'witanime',primary:'https://witanime.you',fallbacks:['https://ristoanime.me'],candidates:[],lastKnownGood:'https://witanime.you',health:'unknown',lastCheckedAt:null,identityHints:['anime','انمي']},
   '3isk':{providerId:'3isk',primary:'https://3iskk.xyz',fallbacks:['https://e.3cktv.com'],candidates:[],lastKnownGood:'https://3iskk.xyz',health:'unknown',lastCheckedAt:null,identityHints:['قصة عشق','3isk']},
@@ -25,18 +27,11 @@ const cloneConfig=(value:ProviderDomainConfig):ProviderDomainConfig=>({...value,
 const freshConfigs=():Record<string,ProviderDomainConfig>=>Object.fromEntries(Object.entries(baseConfigs).map(([id,value])=>[id,cloneConfig(value)]));
 const keyFor=(providerId:string,url:string)=>`${providerId}|${url}`;
 
-/**
- * Runtime domain state belongs to a registry instance. Keeping observations and
- * lastKnownGood in module-level objects made nominally fresh registries share
- * circuit/ranking state across tests and would also couple independent runtime
- * consumers. The immutable base contract is cloned for every instance instead.
- */
+/** Runtime domain state belongs to a registry instance. */
 export class DomainRegistry {
   private readonly configs:Record<string,ProviderDomainConfig>;
   private readonly observations=new Map<string,DomainObservation>();
-
   constructor(){this.configs=freshConfigs();}
-
   get(providerId:string):ProviderDomainConfig|undefined{return this.configs[providerId];}
   all():ProviderDomainConfig[]{return Object.values(this.configs).map(cloneConfig);}
   observation(providerId:string,url:string):DomainObservation|undefined{const o=this.observations.get(keyFor(providerId,url));return o?{...o}:undefined;}
