@@ -26,5 +26,11 @@ jobs:
         env:
           EXPECT_DEGRADED_REASON: cloudflare-challenge
         run: npm run e2e:provider -- wecima "مسلسل"
+      # FaselHD is currently hard-blocked by an external 403 on both verified
+      # canonical origins from hosted CI. Keep its strict gate, but run the next
+      # independent provider proof first so the blocked origin does not hide
+      # actionable ArabSeed runtime regressions.
+      - name: P0 runtime evidence - ArabSeed
+        run: npm run e2e:provider -- arabseed "مسلسل"
       - name: P0 runtime evidence - FaselHD
         run: npm run e2e:provider -- faselhd "مسلسل"
