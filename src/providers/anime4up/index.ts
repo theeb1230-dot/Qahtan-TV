@@ -29,6 +29,10 @@ export class Anime4upProvider extends BaseProvider {
     try { return new URL(url).origin; } catch { return this.mainUrl; }
   }
 
+  private landingUrl(baseUrl: string): string {
+    return `${this.originFor(baseUrl)}/home8/`;
+  }
+
   private parseItems(resp: Awaited<ReturnType<HttpClient['get']>>, type?: StremioContentType, baseUrl = this.mainUrl): ProviderItem[] {
     const items: ProviderItem[] = [];
     const seen = new Set<string>();
@@ -71,7 +75,11 @@ export class Anime4upProvider extends BaseProvider {
       let items = this.parseItems(search, undefined, origin);
       let identityVerified = this.hasIdentity(search, items);
       if (items.length === 0 || !identityVerified) {
-        const home = await this.http.get(baseUrl, { headers: { 'User-Agent': MOBILE_USER_AGENT } });
+        // The canonical origin redirects to /home8/ in browsers, but hosted HTTP
+        // clients do not always receive the same redirect representation. Probe
+        // the documented first-party landing explicitly before declaring identity
+        // failure; this is ordinary same-origin navigation, not challenge bypass.
+        const home = await this.http.get(this.landingUrl(baseUrl), { headers: { 'User-Agent': MOBILE_USER_AGENT } });
         const tokens = query.toLocaleLowerCase().split(/\s+/).filter(Boolean);
         const homeItems = this.parseItems(home, undefined, origin);
         items = homeItems.filter((item) => tokens.every((token) => item.title.toLocaleLowerCase().includes(token)));
@@ -89,7 +97,7 @@ export class Anime4upProvider extends BaseProvider {
       let items = this.parseItems(resp, type, origin);
       let identityVerified = this.hasIdentity(resp, items);
       if ((items.length === 0 || !identityVerified) && page === 1) {
-        const home = await this.http.get(baseUrl, { headers: { 'User-Agent': MOBILE_USER_AGENT } });
+        const home = await this.http.get(this.landingUrl(baseUrl), { headers: { 'User-Agent': MOBILE_USER_AGENT } });
         items = this.parseItems(home, type, origin);
         identityVerified = this.hasIdentity(home, items);
       }
@@ -142,10 +150,6 @@ export class Anime4upProvider extends BaseProvider {
     resp.$('ul#episode-servers li a, div.server-item a, [data-ep-url], [data-url]').each((_, el) => {
       addServerLink(resp.$(el).attr('data-ep-url') || resp.$(el).attr('data-url') || resp.$(el).attr('href'));
     });
-    // Current Anime4Up episode pages may expose the selected player directly as
-    // an iframe rather than repeating it in the legacy server-list selectors.
-    // Treat first-party HTML as the source of truth and normalize protocol-relative
-    // and same-origin iframe URLs before handing them to the generic extractor.
     resp.$('iframe[src]').each((_, el) => addServerLink(resp.$(el).attr('src')));
     for (const link of serverLinks) {
       try { streams.push(...await extractStreams(link, fullUrl)); }
