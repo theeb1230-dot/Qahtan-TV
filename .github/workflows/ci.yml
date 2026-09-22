@@ -26,13 +26,25 @@ jobs:
         env:
           EXPECT_DEGRADED_REASON: cloudflare-challenge
         run: npm run e2e:provider -- wecima "مسلسل"
-      # FaselHD is currently hard-blocked by an external 403 on both verified
-      # canonical origins from hosted CI. Keep its strict gate, but run the next
-      # independent provider proof first so the blocked origin does not hide
-      # actionable ArabSeed runtime regressions.
-      # This title is currently present on ArabSeed's first-party catalog surface.
-      # Search/catalog/meta/stream acceptance remains strict; this is not a fixture.
+      # ArabSeed and FaselHD are independent P0 runtime proofs. Collect both
+      # results in every run so one external/provider failure cannot hide the
+      # other provider's evidence. The final aggregate step remains strict:
+      # either failure keeps CI red, so continue-on-error here is not a waiver.
       - name: P0 runtime evidence - ArabSeed
+        id: arabseed_runtime
+        continue-on-error: true
         run: npm run e2e:provider -- arabseed "Best of the Best"
       - name: P0 runtime evidence - FaselHD
+        id: faselhd_runtime
+        continue-on-error: true
         run: npm run e2e:provider -- faselhd "مسلسل"
+      - name: P0 runtime evidence - aggregate strict gate
+        if: always()
+        env:
+          ARABSEED_OUTCOME: ${{ steps.arabseed_runtime.outcome }}
+          FASELHD_OUTCOME: ${{ steps.faselhd_runtime.outcome }}
+        run: |
+          echo "ArabSeed runtime outcome: ${ARABSEED_OUTCOME}"
+          echo "FaselHD runtime outcome: ${FASELHD_OUTCOME}"
+          test "${ARABSEED_OUTCOME}" = "success"
+          test "${FASELHD_OUTCOME}" = "success"
