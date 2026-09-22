@@ -15,13 +15,17 @@ if (!provider) {
   process.exit(2);
 }
 
+type CandidateDiagnostic = {
+  id: string; type: StremioContentType; stage: 'meta' | 'episodes' | 'streams' | 'working';
+  meta: boolean; episodes: number; streams: number; unsafeStreams: number; error?: string;
+};
 type Evidence = {
   providerId: string; query: string; status: 'Working' | 'Partial' | 'Broken'; search: number; catalog: number;
   meta: boolean; episodes: number; streams: number; streamSchemesSafe: boolean; selectedId?: string;
   selectedType?: StremioContentType; error?: string; diagnostics?: Record<string, unknown>;
-  expectedDegraded?: boolean; degradedReason?: string;
+  candidateDiagnostics?: CandidateDiagnostic[]; expectedDegraded?: boolean; degradedReason?: string;
 };
-const evidence: Evidence = { providerId, query, status: 'Broken', search: 0, catalog: 0, meta: false, episodes: 0, streams: 0, streamSchemesSafe: false };
+const evidence: Evidence = { providerId, query, status: 'Broken', search: 0, catalog: 0, meta: false, episodes: 0, streams: 0, streamSchemesSafe: false, candidateDiagnostics: [] };
 
 try {
   const search = await provider.search(query); evidence.search = search.length;
@@ -39,16 +43,24 @@ try {
   for (const selected of candidates.slice(0, 3)) {
     evidence.selectedId = selected.id; evidence.selectedType = selected.type;
     const contentId = selected.id.startsWith(`${providerId}:`) ? selected.id.slice(providerId.length + 1) : selected.id;
+    const diagnostic: CandidateDiagnostic = { id: selected.id, type: selected.type, stage: 'meta', meta: false, episodes: 0, streams: 0, unsafeStreams: 0 };
+    evidence.candidateDiagnostics!.push(diagnostic);
     try {
-      const meta = await provider.getMeta(contentId, selected.type); evidence.meta = evidence.meta || Boolean(meta); if (!meta) continue;
-      const episodes = meta.episodes || []; evidence.episodes = Math.max(evidence.episodes, episodes.length);
-      if (selected.type === 'series' && !episodes.length) continue;
+      const meta = await provider.getMeta(contentId, selected.type);
+      diagnostic.meta = Boolean(meta); evidence.meta = evidence.meta || Boolean(meta);
+      if (!meta) { diagnostic.error = 'metadata-empty'; continue; }
+      const episodes = meta.episodes || []; diagnostic.episodes = episodes.length; evidence.episodes = Math.max(evidence.episodes, episodes.length);
+      if (selected.type === 'series' && !episodes.length) { diagnostic.stage = 'episodes'; diagnostic.error = 'series-episodes-empty'; continue; }
+      diagnostic.stage = 'streams';
       const episodeId = selected.type === 'series' ? episodes[0].id.replace(new RegExp(`^${providerId}:`), '') : undefined;
       const streams = await provider.getStreams(contentId, selected.type, episodeId);
-      const schemesSafe = streams.length > 0 && streams.every((stream) => /^https?:\/\//i.test(stream.url));
-      if (!streams.length || !schemesSafe) continue;
-      evidence.streams = streams.length; evidence.streamSchemesSafe = true; evidence.status = 'Working'; break;
-    } catch (candidateError) { evidence.error = (candidateError as Error).message; }
+      diagnostic.streams = streams.length;
+      diagnostic.unsafeStreams = streams.filter((stream) => !/^https?:\/\//i.test(stream.url)).length;
+      const schemesSafe = streams.length > 0 && diagnostic.unsafeStreams === 0;
+      if (!streams.length) { diagnostic.error = 'streams-empty'; continue; }
+      if (!schemesSafe) { diagnostic.error = 'unsafe-stream-scheme'; continue; }
+      diagnostic.stage = 'working'; evidence.streams = streams.length; evidence.streamSchemesSafe = true; evidence.status = 'Working'; break;
+    } catch (candidateError) { diagnostic.error = (candidateError as Error).message; evidence.error = diagnostic.error; }
   }
   if (evidence.status !== 'Working') evidence.status = evidence.meta ? 'Partial' : 'Broken';
 } catch (error) {
@@ -60,34 +72,14 @@ async function safePageDiagnostics(url: string): Promise<Record<string, unknown>
   try {
     const response = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36', Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8' }, redirect: 'follow', signal: AbortSignal.timeout(15000) });
     const html = await response.text(); const title = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim() || '';
-    return {
-      status: response.status,
-      finalHost: new URL(response.url).hostname,
-      contentType: response.headers.get('content-type')?.split(';')[0] || null,
-      cfMitigated: response.headers.get('cf-mitigated') || null,
-      accessChallengeFingerprint: /just a moment|cf-chl-|challenge-platform|cloudflare/i.test(html),
-      bodyBytes: Buffer.byteLength(html),
-      title: title.slice(0, 160),
-      brandFingerprint: /arab\s*seed|arabseed|عرب\s*سيد/i.test(html),
-      categoryFilms: (html.match(/href=["'][^"']*\/category\/films/gi) || []).length,
-      categoryTv: (html.match(/href=["'][^"']*\/category\/tv/gi) || []).length,
-      watchLinks: (html.match(/href=["'][^"']*\/watch\//gi) || []).length,
-      seriesLinks: (html.match(/href=["'][^"']*\/selary\//gi) || []).length,
-    };
+    return { status: response.status, finalHost: new URL(response.url).hostname, contentType: response.headers.get('content-type')?.split(';')[0] || null, cfMitigated: response.headers.get('cf-mitigated') || null, accessChallengeFingerprint: /just a moment|cf-chl-|challenge-platform|cloudflare/i.test(html), bodyBytes: Buffer.byteLength(html), title: title.slice(0, 160), brandFingerprint: /arab\s*seed|arabseed|عرب\s*سيد/i.test(html), categoryFilms: (html.match(/href=["'][^"']*\/category\/films/gi) || []).length, categoryTv: (html.match(/href=["'][^"']*\/category\/tv/gi) || []).length, watchLinks: (html.match(/href=["'][^"']*\/watch\//gi) || []).length, seriesLinks: (html.match(/href=["'][^"']*\/selary\//gi) || []).length };
   } catch (error) { return { requestError: (error as Error).message }; }
 }
 
 if (providerId === 'arabseed' && evidence.status !== 'Working') {
-  const home = await safePageDiagnostics('https://www.arabseed.wine/');
-  const films = await safePageDiagnostics('https://www.arabseed.wine/category/films/');
-  const tv = await safePageDiagnostics('https://www.arabseed.wine/category/tv/');
+  const home = await safePageDiagnostics('https://www.arabseed.wine/'); const films = await safePageDiagnostics('https://www.arabseed.wine/category/films/'); const tv = await safePageDiagnostics('https://www.arabseed.wine/category/tv/');
   const blockedPaths = [films, tv].filter((page) => page.status === 403 && (page.cfMitigated === 'challenge' || page.accessChallengeFingerprint === true)).length;
-  evidence.diagnostics = {
-    home,
-    films,
-    tv,
-    accessClassification: home.status === 200 && blockedPaths === 2 ? 'home-reachable-category-paths-challenged' : 'unclassified',
-  };
+  evidence.diagnostics = { home, films, tv, accessClassification: home.status === 200 && blockedPaths === 2 ? 'home-reachable-category-paths-challenged' : 'unclassified' };
 }
 
 if (providerId === 'wecima' && evidence.status !== 'Working') {
@@ -99,8 +91,7 @@ if (providerId === 'wecima' && evidence.status !== 'Working') {
 }
 
 if (expectedDegradedReason === 'cloudflare-challenge' && providerId === 'wecima' && evidence.status === 'Broken') {
-  const diagnostics = evidence.diagnostics || {};
-  const isExpectedChallenge = diagnostics.status === 403 && diagnostics.cfMitigated === 'challenge' && diagnostics.finalHost === 'wecima.cx';
+  const diagnostics = evidence.diagnostics || {}; const isExpectedChallenge = diagnostics.status === 403 && diagnostics.cfMitigated === 'challenge' && diagnostics.finalHost === 'wecima.cx';
   if (isExpectedChallenge) { evidence.expectedDegraded = true; evidence.degradedReason = 'cloudflare-challenge'; }
 }
 
