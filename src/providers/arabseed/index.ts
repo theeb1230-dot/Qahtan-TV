@@ -25,14 +25,20 @@ export class ArabseedProvider extends BaseProvider {
     } catch { return false; }
   }
   private hasIdentity(resp: Awaited<ReturnType<HttpClient['get']>>): boolean {
-    const body = resp.$('body').text();
-    return /arabseed|عرب\s*سيد/i.test(body) && (resp.$('a[href*="/category/films"],a[href*="/category/tv"],a[href$="/watch/"]').length > 0);
+    // Identity must come from the document contract, not just visible body text. The live
+    // WordPress theme can render the ArabSeed brand in title/meta/logo attributes while the
+    // body text itself contains only catalog copy. Require both brand and a parser prerequisite.
+    const html = resp.$.html();
+    const title = resp.$('title').text();
+    const meta = resp.$('meta[property="og:site_name"],meta[property="og:title"],meta[name="application-name"]').map((_, el) => resp.$(el).attr('content') || '').get().join(' ');
+    const logo = resp.$('img[alt],a[title]').map((_, el) => `${resp.$(el).attr('alt') || ''} ${resp.$(el).attr('title') || ''}`).get().join(' ');
+    const brandVerified = /arab\s*seed|arabseed|عرب\s*سيد/i.test(`${title} ${meta} ${logo} ${html.slice(0, 120_000)}`);
+    const parserVerified = resp.$('a[href*="/category/films"],a[href*="/category/tv"],a[href*="/watch/"],a[href*="/selary/"]').length > 0;
+    return brandVerified && parserVerified;
   }
 
   private parseItems(resp: Awaited<ReturnType<HttpClient['get']>>, type?: StremioContentType, baseUrl = this.mainUrl): ProviderItem[] {
     const items: ProviderItem[] = []; const seen = new Set<string>(); const origin = this.originFor(baseUrl);
-    // Support both the historical cards and the current WordPress-style cards. The latter expose
-    // content as same-origin root slugs while categories live below /category/.
     resp.$('a.movie__block, div.MovieBlock a, div.PostBlock a, article a, a[href]').each((_, el) => {
       const a = resp.$(el).is('a') ? resp.$(el) : resp.$(el).find('a').first();
       const href = a.attr('href'); if (!href) return;
@@ -41,7 +47,6 @@ export class ArabseedProvider extends BaseProvider {
       const title = (a.attr('title') || a.find('img').attr('alt') || container.find('h1,h2,h3,h4,.Title,.title').first().text() || a.text()).replace(/\s+/g, ' ').trim();
       if (!title || title.length < 4 || /^(عرب سيد|افلام|المسلسلات|مسلسلات|مشاهدة الان|تحميل الان|المزيد)$/i.test(title)) return;
       const context = `${title} ${container.text()}`;
-      // Navigation/person links can also be same-origin root slugs. Require a content signal.
       if (!/(مسلسل|الحلقة|الموسم|فيلم|\b20\d{2}\b|WEB-DL|BluRay|HDCAM|القسم|الجودة)/i.test(context)) return;
       seen.add(absolute);
       const img = a.find('img').first().length ? a.find('img').first() : container.find('img').first();
@@ -54,7 +59,6 @@ export class ArabseedProvider extends BaseProvider {
 
   async searchInternal(query: string): Promise<ProviderItem[]> {
     return this.withHealthyDomain(async (baseUrl) => {
-      // Current site uses WordPress search. Keep the legacy endpoint as a bounded fallback.
       const candidates = [`${baseUrl}/?s=${encodeURIComponent(query)}`, `${baseUrl}/find/?find=${encodeURIComponent(query)}`];
       for (const url of candidates) {
         const resp = await this.http.get(url); const identity = this.hasIdentity(resp); const items = this.parseItems(resp, undefined, baseUrl);
