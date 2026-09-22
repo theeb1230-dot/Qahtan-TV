@@ -30,10 +30,9 @@ jobs:
       # canonical origins from hosted CI. Keep its strict gate, but run the next
       # independent provider proof first so the blocked origin does not hide
       # actionable ArabSeed runtime regressions.
-      # Use a currently indexed ArabSeed title rather than the generic word
-      # "مسلسل": the gate is proving the search contract, not search-engine
-      # ranking for an ambiguous category word. Catalog/meta/stream remain strict.
+      # This title is currently present on ArabSeed's first-party catalog surface.
+      # Search/catalog/meta/stream acceptance remains strict; this is not a fixture.
       - name: P0 runtime evidence - ArabSeed
-        run: npm run e2e:provider -- arabseed "Murder Mystery"
+        run: npm run e2e:provider -- arabseed "Best of the Best"
       - name: P0 runtime evidence - FaselHD
         run: npm run e2e:provider -- faselhd "مسلسل"
