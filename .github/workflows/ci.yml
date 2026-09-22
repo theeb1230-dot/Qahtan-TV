@@ -40,7 +40,10 @@ jobs:
       - name: P0 runtime evidence - Anime4Up
         id: anime4up_runtime
         continue-on-error: true
-        run: npm run e2e:provider -- anime4up "ون بيس"
+        # The current first-party landing page exposes One Piece canonically in
+        # Latin form. Keep the gate deterministic while still requiring the full
+        # search -> meta -> episodes -> safe stream runtime path.
+        run: npm run e2e:provider -- anime4up "One Piece"
       - name: P0 runtime evidence - WitAnime
         id: witanime_runtime
         continue-on-error: true
