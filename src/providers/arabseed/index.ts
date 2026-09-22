@@ -55,6 +55,16 @@ export class ArabseedProvider extends BaseProvider {
     return items;
   }
 
+  private normalizeSearchText(value: string): string {
+    return value.toLocaleLowerCase().normalize('NFKC').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  }
+  private matchesQuery(item: ProviderItem, query: string): boolean {
+    const terms = this.normalizeSearchText(query).split(/\s+/).filter((term) => term.length > 1);
+    if (!terms.length) return false;
+    const haystack = this.normalizeSearchText(item.title);
+    return terms.every((term) => haystack.includes(term));
+  }
+
   async searchInternal(query: string): Promise<ProviderItem[]> {
     return this.withHealthyDomain(async (baseUrl) => {
       const candidates = [`${baseUrl}/?s=${encodeURIComponent(query)}`, `${baseUrl}/find/?find=${encodeURIComponent(query)}`];
@@ -64,10 +74,13 @@ export class ArabseedProvider extends BaseProvider {
           if (identity && items.length) return { value: items, identityVerified: true };
         } catch (error) { this.logger.debug(`ArabSeed search endpoint unavailable: ${(error as Error).message}`); }
       }
-      // A challenged search endpoint must not poison domain health when the verified home
-      // contract is still reachable. Return no search hits and let callers use catalog fallback.
+      // If search endpoints are challenged but the first-party home document is still verified,
+      // preserve search semantics by matching only visible home-catalog titles. This is a bounded
+      // first-party fallback, not an alternate fetch of the challenged endpoint.
       const home = await this.http.get(`${baseUrl}/`);
-      return { value: [], identityVerified: this.hasIdentity(home) };
+      const identity = this.hasIdentity(home);
+      const items = identity ? this.parseItems(home, undefined, baseUrl).filter((item) => this.matchesQuery(item, query)) : [];
+      return { value: items, identityVerified: identity };
     });
   }
 
@@ -80,11 +93,6 @@ export class ArabseedProvider extends BaseProvider {
         const items = this.parseItems(resp, type, baseUrl);
         if (this.hasIdentity(resp) && items.length > 0) return { value: items, identityVerified: true };
       } catch (error) { this.logger.debug(`ArabSeed category endpoint unavailable: ${(error as Error).message}`); }
-
-      // Hosted runners can reach the verified ArabSeed home document while Cloudflare challenges
-      // /category/* paths. The home page is a first-party catalog surface, so parse it as a bounded
-      // fail-closed fallback rather than bypassing the challenge. Page > 1 has no equivalent home
-      // surface and therefore remains empty.
       if (page > 1) return { value: [], identityVerified: false };
       const home = await this.http.get(`${baseUrl}/`);
       const items = this.parseItems(home, type, baseUrl);
