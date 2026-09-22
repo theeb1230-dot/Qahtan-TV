@@ -3,17 +3,16 @@
 ## Current cycle
 - Start/end main SHA: `003f167613133054c4e08e257830822c012e0560`; default branch `main`.
 - Single active PR: #26 `qahtan/p0-runtime-faselhd-evidence`; mergeable at inspection.
-- Cycle-start PR head: `5736dd6c7b938180e4ef8c4eba24c1557398cdda`.
-- Exact-head CI run `35686805679` completed red. Install, lint, tests, build, Akwam E2E, Yacine E2E, and the exact WeCima degraded contract passed. ArabSeed failed; FaselHD was skipped by fail-fast ordering.
-- The new safe ArabSeed diagnostics are present on that exact head, but the available Actions job surface does not expose step stdout. The failure is therefore proven but its inner stage is not yet safely attributable from Actions evidence alone.
-- Fresh public evidence checked 2026-09-22 shows `www.arabseed.wine/murder-mystery-2019/` was crawled within the last three days and still exposes ArabSeed movie detail plus the watch-page affordance. This is a stronger deterministic search fixture than the generic Arabic category word `مسلسل`.
-- Commit `3259e9c3ba63204af288910b59408888339516e0` changes only the ArabSeed E2E query to the currently indexed exact title `Murder Mystery`; the gate remains strict for search -> catalog -> meta -> non-empty safe HTTP(S) stream. It does not waive empty search, metadata, or stream resolution and does not bypass WAF/CAPTCHA/access control.
+- Cycle-start PR head: `9ae45b8b3139e8bc8d8d4833143d4520c4b36c83`.
+- Exact-head CI run `35694877612` completed red: install, lint, tests, build, Akwam E2E, Yacine E2E and exact WeCima degraded contract passed; ArabSeed failed; FaselHD was skipped by fail-fast ordering.
+- Prior diagnostics proved ArabSeed home remains reachable/identity-valid while both `/category/films/` and `/category/tv/` are challenged from hosted CI. No challenge bypass is permitted or implemented.
+- Root-cause resilience fix `ad416f5636b2d751e647dd3526551062cb2cd044`: ArabSeed search now isolates challenged search endpoints and verifies the first-party home contract before returning no hits; catalog tries canonical category first, then page-1 only falls back to parsing the verified first-party home catalog. This does not fetch a challenged path by alternate means, spoof access, or weaken stream acceptance. Page > 1 fails closed when category access is unavailable.
 - FaselHD remains externally blocked in hosted CI by HTTP 403 on both registered origins. No bypass.
 - Source baseline: 3rb SHA `d27b00f1894a63f86786ff04939d3c76b58f6677`; reuse permission is provenance only, not a third-party license grant.
 
 ## Blockers
 ### P0
-1. ArabSeed exact-head E2E: prove search/catalog -> meta/details -> non-empty safe HTTP(S) stream with the live deterministic movie fixture; series/episodes remain a separate applicable capability proof before v1.0.
+1. ArabSeed exact-head E2E: prove verified-home catalog fallback reaches real meta/details and non-empty safe HTTP(S) stream; then separately prove series/episodes before full Working classification.
 2. FaselHD E2E: hosted runner receives HTTP 403 on both registered origins; strict acceptance remains open without waiver.
 3. Anime4Up, WitAnime, 3isk, EgyDead E2E individually.
 4. SyriaLive independent source/contract proof or remain Broken/degraded.
@@ -34,8 +33,8 @@ UX/polish only after P0/P1.
 
 ## CI / tests / artifacts
 - Main `003f167613133054c4e08e257830822c012e0560`: current base.
-- PR head at cycle start `5736dd6...`: run `35686805679`; install/lint/tests/build green; Akwam Working E2E; Yacine Working E2E; WeCima exact Cloudflare degraded contract accepted; ArabSeed red; FaselHD skipped.
-- Current code head before this state update includes commit `3259e9c3ba63204af288910b59408888339516e0`; exact-head CI was not yet available when inspected, so no runtime credit is granted.
+- PR head at cycle start `9ae45b8b...`: run `35694877612`; install/lint/tests/build green; Akwam Working E2E; Yacine Working E2E; WeCima exact Cloudflare degraded contract accepted; ArabSeed red; FaselHD skipped.
+- Code commit `ad416f5636b2d751e647dd3526551062cb2cd044` adds verified-home catalog resilience for ArabSeed. Exact-head CI was not yet available at state update, so no runtime credit is granted.
 - Releases/artifacts: none release-ready.
 
 ## Provider/domain health
@@ -60,7 +59,7 @@ UX/polish only after P0/P1.
 | Observability/performance/error isolation | 3 | 0.60 | 1.8 |
 | Release gate/artifact/runtime readiness | 7 | 0.40 | 2.8 |
 
-**A) Overall Verified Product Completion: 58.4%.** No credit added for the unproven ArabSeed query correction.
+**A) Overall Verified Product Completion: 58.4%.** No credit added for the unproven ArabSeed fallback.
 
 **B) Runtime-Verified Provider Completion: 2/10 = 20.0%.** Working: Akwam, Yacine TV. Partial/unverified: ArabSeed, FaselHD, Anime4Up, WitAnime, 3isk, EgyDead. Broken/degraded: WeCima, SyriaLive.
 
@@ -69,10 +68,10 @@ UX/polish only after P0/P1.
 **D) Beta Readiness: 55.0%.** Two providers are runtime-verified; broad provider/runtime and release gates remain open.
 
 ## Risks / what does not work
-- ArabSeed remains red on the latest completed exact-head CI. The deterministic live-title query change is not yet exact-head proven and earns no runtime credit.
+- ArabSeed remains red on latest completed exact-head CI. The verified-home fallback is new and receives no runtime credit until exact-head CI proves it.
 - FaselHD cannot currently be proven from GitHub-hosted CI because both registered origins return HTTP 403 before discovery; not Working and not waived.
 - WeCima remains unusable from hosted runtime due its specifically verified Cloudflare challenge; SyriaLive independence remains unproven.
 - Security closure, broad Stremio/extractor runtime proof, licensing/dependency audit and release artifacts remain open.
 
 ## Next target
-Stay on PR #26. Inspect exact-head CI after `3259e9c3...`. If ArabSeed reaches search/meta and fails later, fix the first real watch/extractor defect without weakening the strict gate. If the movie path becomes Working, add a separate current series/episode proof before declaring ArabSeed fully Working, then continue to Anime4Up while FaselHD remains an explicit external-403 blocker. Keep all provider promotion identity-verified and fail-closed.
+Stay on PR #26. Inspect exact-head CI after `ad416f5636b...`. If ArabSeed reaches meta and fails at watch/extractor, fix that first real defect without weakening the gate. If movie path becomes Working, add a separate current series/episode proof before declaring ArabSeed fully Working, then continue to Anime4Up while FaselHD remains an explicit external-403 blocker. Keep all provider promotion identity-verified and fail-closed.
