@@ -16,7 +16,9 @@ const baseConfigs: Record<string, ProviderDomainConfig> = {
   // Keep only the canonical origin here. The old /home/ suffix caused provider paths such as
   // /find and /category to be composed against a stale path contract. Promotion remains runtime-verified.
   arabseed:{providerId:'arabseed',primary:'https://www.arabseed.wine',fallbacks:[],candidates:[],lastKnownGood:null,health:'unknown',lastCheckedAt:null,identityHints:['arabseed','عرب سيد']},
-  anime4up:{providerId:'anime4up',primary:'https://w1.anime4up.rest/home8/',fallbacks:[],candidates:[],lastKnownGood:'https://w1.anime4up.rest/home8/',health:'unknown',lastCheckedAt:null,identityHints:['anime4up']},
+  // Runtime discovery, canonical /anime/ pages and parser prerequisites live at the origin root.
+  // /home8/ was a historical landing path and must not be treated as the operational domain identity.
+  anime4up:{providerId:'anime4up',primary:'https://w1.anime4up.rest',fallbacks:[],candidates:[],lastKnownGood:null,health:'unknown',lastCheckedAt:null,identityHints:['anime4up']},
   witanime:{providerId:'witanime',primary:'https://witanime.you',fallbacks:['https://ristoanime.me'],candidates:[],lastKnownGood:'https://witanime.you',health:'unknown',lastCheckedAt:null,identityHints:['anime','انمي']},
   '3isk':{providerId:'3isk',primary:'https://3iskk.xyz',fallbacks:['https://e.3cktv.com'],candidates:[],lastKnownGood:'https://3iskk.xyz',health:'unknown',lastCheckedAt:null,identityHints:['قصة عشق','3isk']},
   egydead:{providerId:'egydead',primary:'https://tv10.egydead.live/h3/',fallbacks:[],candidates:[],lastKnownGood:'https://tv10.egydead.live/h3/',health:'unknown',lastCheckedAt:null,identityHints:['egydead','ايجي']},
