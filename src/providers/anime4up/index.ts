@@ -124,18 +124,29 @@ export class Anime4upProvider extends BaseProvider {
   async getStreamsInternal(contentId: string, _type: StremioContentType, episodeId?: string): Promise<ResolvedStream[]> {
     const targetPath = episodeId || contentId;
     const fullUrl = this.fixUrl(targetPath);
+    const origin = this.originFor(fullUrl);
     const resp = await this.http.get(fullUrl, { headers: { 'User-Agent': MOBILE_USER_AGENT, Referer: fullUrl } });
     const streams: ResolvedStream[] = [];
     const serverLinks = new Set<string>();
-    resp.$('ul#episode-servers li a, div.server-item a, [data-ep-url], [data-url]').each((_, el) => {
-      let dataUrl = resp.$(el).attr('data-ep-url') || resp.$(el).attr('data-url') || resp.$(el).attr('href');
-      if (!dataUrl) return;
-      if (!dataUrl.startsWith('http') && dataUrl.length > 20) {
-        const decoded = safeBase64Decode(dataUrl);
-        if (decoded.startsWith('http')) dataUrl = decoded;
+    const addServerLink = (raw?: string) => {
+      if (!raw) return;
+      let candidate = raw.trim();
+      if (!candidate) return;
+      if (!candidate.startsWith('http') && !candidate.startsWith('//') && !candidate.startsWith('/')) {
+        const decoded = safeBase64Decode(candidate);
+        if (decoded && decoded !== candidate) candidate = decoded.trim();
       }
-      if (dataUrl.startsWith('http://') || dataUrl.startsWith('https://')) serverLinks.add(dataUrl);
+      const absolute = this.fixUrl(candidate, origin);
+      if (/^https?:\/\//i.test(absolute)) serverLinks.add(absolute);
+    };
+    resp.$('ul#episode-servers li a, div.server-item a, [data-ep-url], [data-url]').each((_, el) => {
+      addServerLink(resp.$(el).attr('data-ep-url') || resp.$(el).attr('data-url') || resp.$(el).attr('href'));
     });
+    // Current Anime4Up episode pages may expose the selected player directly as
+    // an iframe rather than repeating it in the legacy server-list selectors.
+    // Treat first-party HTML as the source of truth and normalize protocol-relative
+    // and same-origin iframe URLs before handing them to the generic extractor.
+    resp.$('iframe[src]').each((_, el) => addServerLink(resp.$(el).attr('src')));
     for (const link of serverLinks) {
       try { streams.push(...await extractStreams(link, fullUrl)); }
       catch (error) { this.logger.debug(`Anime4Up extractor failed: ${(error as Error).message}`); }
