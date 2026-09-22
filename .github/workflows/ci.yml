@@ -26,9 +26,9 @@ jobs:
         env:
           EXPECT_DEGRADED_REASON: cloudflare-challenge
         run: npm run e2e:provider -- wecima "مسلسل"
-      # Collect independent runtime outcomes first. The explicit require steps
-      # below expose exactly which provider failed in GitHub's step metadata,
-      # while still keeping the overall job strictly red on either failure.
+      # Collect provider outcomes independently so one failure never hides the
+      # next provider. Strict require steps below keep every acceptance gate red
+      # unless its real end-to-end runtime path succeeds.
       - name: P0 runtime evidence - ArabSeed
         id: arabseed_runtime
         continue-on-error: true
@@ -37,6 +37,22 @@ jobs:
         id: faselhd_runtime
         continue-on-error: true
         run: npm run e2e:provider -- faselhd "مسلسل"
+      - name: P0 runtime evidence - Anime4Up
+        id: anime4up_runtime
+        continue-on-error: true
+        run: npm run e2e:provider -- anime4up "ون بيس"
+      - name: P0 runtime evidence - WitAnime
+        id: witanime_runtime
+        continue-on-error: true
+        run: npm run e2e:provider -- witanime "ون بيس"
+      - name: P0 runtime evidence - 3isk
+        id: threeisk_runtime
+        continue-on-error: true
+        run: npm run e2e:provider -- 3isk "مسلسل"
+      - name: P0 runtime evidence - EgyDead
+        id: egydead_runtime
+        continue-on-error: true
+        run: npm run e2e:provider -- egydead "مسلسل"
       - name: P0 require ArabSeed runtime success
         if: always()
         env:
@@ -50,4 +66,32 @@ jobs:
           PROVIDER_OUTCOME: ${{ steps.faselhd_runtime.outcome }}
         run: |
           echo "FaselHD runtime outcome: ${PROVIDER_OUTCOME}"
+          test "${PROVIDER_OUTCOME}" = "success"
+      - name: P0 require Anime4Up runtime success
+        if: always()
+        env:
+          PROVIDER_OUTCOME: ${{ steps.anime4up_runtime.outcome }}
+        run: |
+          echo "Anime4Up runtime outcome: ${PROVIDER_OUTCOME}"
+          test "${PROVIDER_OUTCOME}" = "success"
+      - name: P0 require WitAnime runtime success
+        if: always()
+        env:
+          PROVIDER_OUTCOME: ${{ steps.witanime_runtime.outcome }}
+        run: |
+          echo "WitAnime runtime outcome: ${PROVIDER_OUTCOME}"
+          test "${PROVIDER_OUTCOME}" = "success"
+      - name: P0 require 3isk runtime success
+        if: always()
+        env:
+          PROVIDER_OUTCOME: ${{ steps.threeisk_runtime.outcome }}
+        run: |
+          echo "3isk runtime outcome: ${PROVIDER_OUTCOME}"
+          test "${PROVIDER_OUTCOME}" = "success"
+      - name: P0 require EgyDead runtime success
+        if: always()
+        env:
+          PROVIDER_OUTCOME: ${{ steps.egydead_runtime.outcome }}
+        run: |
+          echo "EgyDead runtime outcome: ${PROVIDER_OUTCOME}"
           test "${PROVIDER_OUTCOME}" = "success"
