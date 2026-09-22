@@ -46,9 +46,6 @@ export class Anime4upProvider extends BaseProvider {
       push(a.text().trim(), a.attr('href'), resp.$(el).find('img').attr('data-src') || resp.$(el).find('img').attr('src'));
     });
 
-    // Current 2026 home/search markup also exposes canonical /anime/ links outside
-    // the legacy anime-card-container. Keep discovery tied to canonical first-party
-    // item URLs rather than a brittle presentation class.
     resp.$('a[href*="/anime/"]').each((_, el) => {
       const a = resp.$(el);
       const container = a.closest('article, div, li');
@@ -60,8 +57,14 @@ export class Anime4upProvider extends BaseProvider {
   }
 
   private hasIdentity(resp: Awaited<ReturnType<HttpClient['get']>>, items: ProviderItem[]): boolean {
+    // Search/archive responses do not consistently repeat the brand in <title>.
+    // Verify both a first-party brand fingerprint anywhere in the document and
+    // the parser prerequisite (canonical /anime/ items) before accepting a domain.
     const title = (resp.$('title').text() || resp.$('h1').first().text()).toLowerCase();
-    return (title.includes('anime4up') || title.includes('انمي فور اب') || title.includes('أنمي فور اب')) && items.length > 0;
+    const documentText = resp.$('body').text().replace(/\s+/g, ' ').toLowerCase();
+    const brandFingerprint = title.includes('anime4up') || title.includes('انمي فور اب') || title.includes('أنمي فور اب') ||
+      documentText.includes('anime4up') || documentText.includes('انمي فور اب') || documentText.includes('أنمي فور اب');
+    return brandFingerprint && items.length > 0;
   }
 
   async searchInternal(query: string): Promise<ProviderItem[]> {
@@ -70,11 +73,12 @@ export class Anime4upProvider extends BaseProvider {
       const search = await this.http.get(`${origin}/?search_string=${encodeURIComponent(query)}`, { headers: { 'User-Agent': MOBILE_USER_AGENT } });
       let items = this.parseItems(search, undefined, origin);
       let identityVerified = this.hasIdentity(search, items);
-      if (items.length === 0) {
+      if (items.length === 0 || !identityVerified) {
         const home = await this.http.get(baseUrl, { headers: { 'User-Agent': MOBILE_USER_AGENT } });
         const tokens = query.toLocaleLowerCase().split(/\s+/).filter(Boolean);
-        items = this.parseItems(home, undefined, origin).filter((item) => tokens.every((token) => item.title.toLocaleLowerCase().includes(token)));
-        identityVerified = this.hasIdentity(home, this.parseItems(home, undefined, origin));
+        const homeItems = this.parseItems(home, undefined, origin);
+        items = homeItems.filter((item) => tokens.every((token) => item.title.toLocaleLowerCase().includes(token)));
+        identityVerified = this.hasIdentity(home, homeItems);
       }
       return { value: items, identityVerified };
     });
@@ -87,7 +91,7 @@ export class Anime4upProvider extends BaseProvider {
       const resp = await this.http.get(`${origin}/${path}/page/${page}/`, { headers: { 'User-Agent': MOBILE_USER_AGENT } });
       let items = this.parseItems(resp, type, origin);
       let identityVerified = this.hasIdentity(resp, items);
-      if (items.length === 0 && page === 1) {
+      if ((items.length === 0 || !identityVerified) && page === 1) {
         const home = await this.http.get(baseUrl, { headers: { 'User-Agent': MOBILE_USER_AGENT } });
         items = this.parseItems(home, type, origin);
         identityVerified = this.hasIdentity(home, items);
