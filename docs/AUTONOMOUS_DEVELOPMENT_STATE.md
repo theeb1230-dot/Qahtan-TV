@@ -3,14 +3,14 @@
 ## Current cycle
 - Start/main SHA: `003f167613133054c4e08e257830822c012e0560`; default branch `main`.
 - Single active PR: #26 `qahtan/p0-runtime-faselhd-evidence`; all work remains on this branch only.
-- PR head at cycle start: `f245e99de89ee4457cb47483b4382f1846ab8f91`.
-- Exact-head workflow: run `35854468633`, merge ref `10b5ad774cb840f5d2f914835af67e9808720ea5`, completed `failure`.
-- `npm install` and TypeScript lint passed, but `npm test` failed before build/runtime because the domain-registry test still expected only the legacy FaselHD fallback.
-- The test output explicitly showed actual fallbacks `['https://www.fasel-hd.com','https://fasellhd.baby']` versus the stale expected single-entry array.
+- PR head at cycle start: `756de6a094d10bd302dea9ed872ad3243657af3f`.
+- Exact-head workflow: run `35861332682`, merge ref `d23fb5261504db61e4f1be82984c8e1df8338537`, completed `failure`.
+- Static gates were green: install, TypeScript lint, 26/26 tests, build and contract checks.
+- Runtime: Akwam `Working` (5 safe streams); Yacine TV `Working` (1 safe stream in this run); WeCima explicit Cloudflare degraded contract passed; ArabSeed strict failure; FaselHD `Partial` with 84 catalog items, metadata and 190 episodes on one candidate but streams empty; Anime4Up, WitAnime, 3isk and EgyDead strict failures.
 
 ## Blockers ordered by release impact
 ### P0
-1. Re-run exact-head CI after updating the registry contract test to include the verified redirected FaselHD origin. Acceptance: install/lint/tests/build green, then FaselHD identity -> parser prerequisites -> discovery/catalog -> metadata/details -> episodes when applicable -> safe non-empty HTTP(S) streams.
+1. FaselHD stream resolution remains the highest solvable blocker. Acceptance: identity -> parser prerequisites -> discovery/catalog -> metadata/details -> episodes when applicable -> non-empty safe HTTP(S) streams on the effective redirected origin, with exact-head CI green.
 2. ArabSeed is home-reachable but category paths return a Cloudflare challenge; do not bypass or classify as Working.
 3. Anime4Up, WitAnime, 3isk and EgyDead fail identity verification on the hosted runner; each needs independent evidence before promotion.
 4. WeCima must remain degraded only for verified `403 + cf-mitigated=challenge` on `wecima.cx`; no waiver or bypass.
@@ -28,22 +28,30 @@ UX/polish only after P0/P1.
 
 ## Acceptance criteria
 - Closed from completed evidence: Akwam real safe stream path; Yacine runtime regression; exact WeCima Cloudflare-only degraded contract; tested DomainRegistry/provider-health foundation; FaselHD redirect-aware identity/catalog path and effective-origin registry entry.
-- Open: exact-head green after test-contract correction; FaselHD full runtime proof; ArabSeed and the remaining strict provider E2E gates; security/Stremio/release gates.
-- No provider promotion or CI waiver is introduced by the FaselHD domain fix.
+- Open: FaselHD non-empty stream proof; ArabSeed and the remaining strict provider E2E gates; security/Stremio/release gates.
+- No provider promotion or CI waiver is introduced by the effective-origin fix.
 
 ## Work performed this cycle
-- Re-read repository metadata, PR #26, exact-head workflow `35854468633`, job `107159566189`, and full logs.
-- Confirmed the new failure was a stale unit assertion, not a TypeScript or runtime regression: the registry now correctly exposes `fasellhd.baby`, while `src/tests/domain-registry.test.ts` still expected only `https://www.fasel-hd.com`.
-- Updated `src/tests/domain-registry.test.ts` so the test asserts both the legacy fallback and the verified redirected effective origin, and confirms `orderedUrls('faselhd')` includes the new origin.
-- Preserved fail-closed identity verification and safe-stream requirements; no bypass, no promotion to trusted last-known-good without full E2E.
+- Re-read repository metadata, PR #26, exact-head workflow `35861332682`, job `107182007212`, step summaries and full logs.
+- Confirmed the previous stale registry assertion is resolved: install/lint/tests/build are green again.
+- Confirmed the next real blocker is architectural routing after redirect: FaselHD discovery uses `fasellhd.baby`, but metadata/stream requests can still be routed through the original registry origin. Updated `src/providers/faselhd/index.ts` to derive and preserve the effective origin from `response.url` across search, catalog, metadata, episode URLs, player/referrer requests and server-link extraction.
+- Preserved fail-closed identity verification, safe-stream checks and no bypass for Cloudflare/DRM/paywall.
 
 ## CI / tests / artifacts
-- Exact-head run `35854468633` on merge ref `10b5ad774cb840f5d2f914835af67e9808720ea5`: install and lint green; test suite reported 26 internal passes but exited non-zero on the stale domain-registry deep-equality assertion; build and all runtime provider steps were skipped.
-- Akwam/Yacine/WeCima runtime evidence was therefore not re-executed on this head.
+- Exact-head run `35861332682` on merge ref `d23fb5261504db61e4f1be82984c8e1df8338537`: install, lint, 26/26 tests, build and contract checks green; provider runtime steps executed.
+- Akwam: `Working`, catalog 24, metadata true, episodes 2, streams 5, unsafe streams 0.
+- Yacine TV: `Working`, catalog 216, metadata true, streams 1, unsafe streams 0.
+- WeCima: expected degraded Cloudflare contract passed: status 403, finalHost `wecima.cx`, `cf-mitigated=challenge`, brand fingerprint true.
+- ArabSeed: home 200 with brand fingerprint, but films/TV paths return Cloudflare challenge.
+- FaselHD: identity/parser passed on `fasellhd.baby`, catalog 84, metadata true, episodes 190, streams 0; failure is now isolated to stream routing/resolution, not identity or catalog.
+- Anime4Up, WitAnime, 3isk and EgyDead failed identity verification and returned no runtime catalog item.
+- Strict require steps failed for ArabSeed, FaselHD, Anime4Up, WitAnime, 3isk and EgyDead as intended. No waiver was added.
 - Releases/artifacts: none release-ready.
 
 ## Provider/domain health
-- Last completed runtime evidence before this test-contract failure: Akwam and Yacine Working; WeCima verified Cloudflare degraded; ArabSeed home-reachable/category-challenged; FaselHD identity/catalog reached but metadata was previously blocked by the missing effective origin; Anime4Up, WitAnime, 3isk and EgyDead unverified; SyriaLive independent/fail-closed.
+- Working on completed runtime evidence: Akwam, Yacine TV.
+- Partial: FaselHD (identity/catalog/meta/episodes pass, stream empty).
+- Broken/degraded: WeCima (verified Cloudflare challenge only), ArabSeed (category challenge), Anime4Up, WitAnime, 3isk, EgyDead, SyriaLive.
 - Quarantined and excluded from the ten-provider denominator: Tuktuk candidate.
 
 ## Weighted verified completion
@@ -64,18 +72,17 @@ UX/polish only after P0/P1.
 
 **A) Overall Verified Product Completion: 58.4%.**
 
-**B) Runtime-Verified Provider Completion: 2/10 = 20.0%.** Working: Akwam, Yacine TV. Partial/unverified: ArabSeed, FaselHD, Anime4Up, WitAnime, 3isk, EgyDead. Broken/degraded: WeCima, SyriaLive.
+**B) Runtime-Verified Provider Completion: 2/10 = 20.0%.** Working: Akwam, Yacine TV. Partial: FaselHD. Broken/degraded/unverified: ArabSeed, WeCima, Anime4Up, WitAnime, 3isk, EgyDead, SyriaLive.
 
 **C) Release Gate Completion: 3/7 = 42.9%.** Fixed denominator seven.
 
-**D) Beta Readiness: 55.0%.** No change is credited for this test-only repair until exact-head CI and runtime gates are green again.
+**D) Beta Readiness: 55.0%.** No change is credited until the new effective-origin stream fix passes exact-head CI and FaselHD produces a non-empty safe stream.
 
 ## Risks / what does not work
-- The current head is not release-ready because the stale registry assertion prevented the workflow from reaching build and runtime evidence.
-- Six strict provider gates remain open; none is promoted without full stream evidence.
+- The current head is not release-ready because six strict provider gates remain open.
 - WeCima remains unusable from hosted runtime due its specifically verified Cloudflare challenge; ArabSeed category paths are challenged; SyriaLive independence remains unproven.
-- FaselHD has a verified effective origin entry now, but metadata/episodes/stream evidence is still open until exercised end-to-end.
+- FaselHD now reaches identity/catalog/metadata/episodes on `fasellhd.baby`, but stream resolution is still empty; this is the next concrete P0.
 - Security closure, Stremio runtime proof, licensing/dependency audit and release artifacts remain open.
 
 ## Next target
-Stay on PR #26. Run exact-head CI on commit `12b254ee2f05b6dad1dc3adc762abf8a5a74fed5`, confirm the stale assertion is gone, then inspect whether FaselHD metadata -> episodes -> stream succeeds through `fasellhd.baby`. If it still fails, use the next concrete stage from logs; do not broaden claims or waive the stream requirement. Continue strict runtime gates without waivers and do not merge until exact-head CI is green and the PR is mergeable.
+Stay on PR #26. Run exact-head CI on the new `effective-origin` provider commit, then inspect whether FaselHD stream extraction yields a non-empty safe HTTP(S) result using the effective redirected origin and correct referer. If it still fails, use the next concrete stage from logs; do not broaden claims or waive the stream requirement. Continue strict runtime gates without waivers and do not merge until exact-head CI is green and the PR is mergeable.
