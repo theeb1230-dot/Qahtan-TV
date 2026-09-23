@@ -44,9 +44,17 @@ export class FaselhdProvider extends BaseProvider {
   }
 
   private async verifyCanonicalDomain(baseUrl: string): Promise<boolean> {
-    const allowedHosts = new Set(['www.fasel-hd.co', 'fasel-hd.co', 'www.fasel-hd.com', 'fasel-hd.com']);
-    if (!allowedHosts.has(new URL(baseUrl).hostname)) {
-      this.logger.debug(`FaselHD identity rejected non-canonical host ${new URL(baseUrl).hostname}`);
+    const allowedHosts = new Set([
+      'www.fasel-hd.co',
+      'fasel-hd.co',
+      'www.fasel-hd.com',
+      'fasel-hd.com',
+      // Quarantined fallback candidate: it must still pass the same identity/parser checks below.
+      'fasellhd.rest',
+    ]);
+    const parsedBase = new URL(baseUrl);
+    if (!allowedHosts.has(parsedBase.hostname)) {
+      this.logger.debug(`FaselHD identity rejected non-canonical host ${parsedBase.hostname}`);
       return false;
     }
     const headers = { 'User-Agent': MOBILE_USER_AGENT };
