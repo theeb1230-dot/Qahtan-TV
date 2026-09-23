@@ -61,8 +61,15 @@ export class ArabseedProvider extends BaseProvider {
   private matchesQuery(item: ProviderItem, query: string): boolean {
     const terms = this.normalizeSearchText(query).split(/\s+/).filter((term) => term.length > 1);
     if (!terms.length) return false;
+    const genericSeries = new Set(['مسلسل', 'مسلسلات', 'series', 'tv', 'serie']);
+    const genericMovies = new Set(['فيلم', 'افلام', 'أفلام', 'movie', 'movies', 'film']);
     const haystack = this.normalizeSearchText(item.title);
-    return terms.every((term) => haystack.includes(term));
+    const semanticTerms = terms.filter((term) => !genericSeries.has(term) && !genericMovies.has(term));
+    const wantsSeries = terms.some((term) => genericSeries.has(term));
+    const wantsMovie = terms.some((term) => genericMovies.has(term));
+    if (wantsSeries && item.type !== 'series') return false;
+    if (wantsMovie && item.type !== 'movie') return false;
+    return semanticTerms.length === 0 || semanticTerms.every((term) => haystack.includes(term));
   }
 
   async searchInternal(query: string): Promise<ProviderItem[]> {
@@ -74,9 +81,6 @@ export class ArabseedProvider extends BaseProvider {
           if (identity && items.length) return { value: items, identityVerified: true };
         } catch (error) { this.logger.debug(`ArabSeed search endpoint unavailable: ${(error as Error).message}`); }
       }
-      // If search endpoints are challenged but the first-party home document is still verified,
-      // preserve search semantics by matching only visible home-catalog titles. This is a bounded
-      // first-party fallback, not an alternate fetch of the challenged endpoint.
       const home = await this.http.get(`${baseUrl}/`);
       const identity = this.hasIdentity(home);
       const items = identity ? this.parseItems(home, undefined, baseUrl).filter((item) => this.matchesQuery(item, query)) : [];
