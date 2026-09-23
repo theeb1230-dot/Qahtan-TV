@@ -18,17 +18,23 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      # Run every provider independently so one transient outage never hides
+      # the evidence needed to classify the remaining providers. The explicit
+      # require steps below keep the gate strict.
       - name: P0 runtime evidence - Akwam
+        id: akwam_runtime
+        continue-on-error: true
         run: npm run e2e:provider -- akwam "مسلسل"
       - name: P0 runtime evidence - Yacine TV
+        id: yacine_runtime
+        continue-on-error: true
         run: npm run e2e:provider -- yacinetv "رياضة"
       - name: P0 runtime evidence - WeCima degraded contract
+        id: wecima_runtime
+        continue-on-error: true
         env:
           EXPECT_DEGRADED_REASON: cloudflare-challenge
         run: npm run e2e:provider -- wecima "مسلسل"
-      # Collect provider outcomes independently so one failure never hides the
-      # next provider. Strict require steps below keep every acceptance gate red
-      # unless its real end-to-end runtime path succeeds.
       - name: P0 runtime evidence - ArabSeed
         id: arabseed_runtime
         continue-on-error: true
@@ -56,6 +62,27 @@ jobs:
         id: egydead_runtime
         continue-on-error: true
         run: npm run e2e:provider -- egydead "مسلسل"
+      - name: P0 require Akwam runtime success
+        if: always()
+        env:
+          PROVIDER_OUTCOME: ${{ steps.akwam_runtime.outcome }}
+        run: |
+          echo "Akwam runtime outcome: ${PROVIDER_OUTCOME}"
+          test "${PROVIDER_OUTCOME}" = "success"
+      - name: P0 require Yacine runtime success
+        if: always()
+        env:
+          PROVIDER_OUTCOME: ${{ steps.yacine_runtime.outcome }}
+        run: |
+          echo "Yacine runtime outcome: ${PROVIDER_OUTCOME}"
+          test "${PROVIDER_OUTCOME}" = "success"
+      - name: P0 require WeCima degraded contract
+        if: always()
+        env:
+          PROVIDER_OUTCOME: ${{ steps.wecima_runtime.outcome }}
+        run: |
+          echo "WeCima runtime outcome: ${PROVIDER_OUTCOME}"
+          test "${PROVIDER_OUTCOME}" = "success"
       - name: P0 require ArabSeed runtime success
         if: always()
         env:
