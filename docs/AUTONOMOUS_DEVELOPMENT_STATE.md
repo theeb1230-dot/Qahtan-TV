@@ -2,12 +2,12 @@
 
 ## Current cycle
 - Start/main SHA: `003f167613133054c4e08e257830822c012e0560`; default branch `main`.
-- Single active PR: #26 `qahtan/p0-runtime-faselhd-evidence`; work remains on this branch only. PR is open and currently mergeable.
-- Current PR head at inspection: `5b53cfb90f4ec8870fe79369cd637d8bbce5e2dd`.
-- Latest completed exact-head CI: run `35818376441` on merge ref `ae50cdf2415966a998eaf12fef775e03eaf8d810`; install/lint/tests/build succeeded and Akwam/Yacine/WeCima degraded/ArabSeed/FaselHD/Anime4Up/WitAnime/3isk/EgyDead runtime steps executed.
-- Root cause of current red state: the six strict runtime outcome gates for ArabSeed, FaselHD, Anime4Up, WitAnime, 3isk and EgyDead remain red. The run did not fail at compile/test/build.
-- Runtime evidence from this run: Akwam Working (5 safe streams); Yacine Working (1 safe stream); WeCima degraded with `403 + cf-mitigated=challenge`; ArabSeed home reachable but category paths challenged; FaselHD, Anime4Up, WitAnime, 3isk and EgyDead identity/parser contracts unverified from the hosted runner.
-- New code change in this cycle: add `https://fasellhd.rest/main` as a quarantined FaselHD candidate only. It is not primary/fallback/lastKnownGood and earns no runtime credit until full evidence passes.
+- Single active PR: #26 `qahtan/p0-runtime-faselhd-evidence`; work remains on this branch only. PR is open and mergeable at last inspection.
+- Current PR head after this cycle's code change: `cbfcf9f5beca6338cf3b8b3eda72ffb8ff352e51`.
+- Latest completed exact-head CI before this cycle's code change: run `35822429992` on merge ref `4a004e05d98b1ff1a75de9b610109f98fa1b7bd8`; install/lint/tests/build succeeded and Akwam/Yacine/WeCima degraded/ArabSeed/FaselHD/Anime4Up/WitAnime/3isk/EgyDead runtime steps executed.
+- Root cause of current red state: strict runtime outcome gates for ArabSeed, FaselHD, Anime4Up, WitAnime, 3isk and EgyDead remain red. The run did not fail at compile/test/build.
+- Runtime evidence from this run: Akwam Working (5 safe streams); Yacine Working (3 safe streams); WeCima degraded with `403 + cf-mitigated=challenge`; ArabSeed home reachable but category paths challenged; FaselHD, Anime4Up, WitAnime, 3isk and EgyDead identity/parser contracts unverified from the hosted runner.
+- New code change in this cycle: the quarantined `https://fasellhd.rest/main` candidate was previously rejected before probing because the FaselHD provider's canonical-host allowlist omitted `fasellhd.rest`. The allowlist now permits that candidate to enter the existing identity/parser/sitemap verification path. It is still quarantined and earns no runtime credit until full evidence passes.
 
 ## Blockers ordered by release impact
 ### P0
@@ -32,10 +32,10 @@ UX/polish only after P0/P1.
 - No provider promotion or CI waiver is introduced by the FaselHD candidate addition.
 
 ## CI / tests / artifacts
-- Run `35818376441` on merge ref `ae50cdf2415966a998eaf12fef775e03eaf8d810`: npm install, lint, 26/26 tests, security contracts and production build were green.
-- Runtime outputs: Akwam `Working`, catalog 24, metadata true, episodes 2, streams 5, unsafe streams 0; Yacine `Working`, catalog 186, metadata true, streams 1, unsafe streams 0; WeCima `Broken` with expected degraded reason `cloudflare-challenge`, status 403, finalHost `wecima.cx`, `cf-mitigated=challenge`; ArabSeed `home-reachable-category-paths-challenged`; FaselHD/Anime4Up/WitAnime/3isk/EgyDead `Broken`/identity verification failed at hosted runner.
+- Run `35822429992` on merge ref `4a004e05d98b1ff1a75de9b610109f98fa1b7bd8`: npm install, lint, 26/26 tests, security contracts and production build were green.
+- Runtime outputs: Akwam `Working`, catalog 24, metadata true, episodes 2, streams 5, unsafe streams 0; Yacine `Working`, catalog 216, metadata true, streams 3, unsafe streams 0; WeCima `Broken` with expected degraded reason `cloudflare-challenge`, status 403, finalHost `wecima.cx`, `cf-mitigated=challenge`; ArabSeed `home-reachable-category-paths-challenged`; FaselHD/Anime4Up/WitAnime/3isk/EgyDead `Broken`/identity verification failed at hosted runner.
 - Strict outcome checks for ArabSeed/FaselHD/Anime4Up/WitAnime/3isk/EgyDead failed as intended; no waiver was added.
-- New code commit: `fefa3a64a20abf030fa9b0d13a1e126690399fc0` adds the quarantined FaselHD candidate.
+- New code commit: `cbfcf9f5beca6338cf3b8b3eda72ffb8ff352e51` allows the quarantined FaselHD candidate to reach identity verification instead of being rejected solely by host allowlisting.
 - Releases/artifacts: none release-ready.
 
 ## Provider/domain health
@@ -71,8 +71,8 @@ UX/polish only after P0/P1.
 ## Risks / what does not work
 - Six strict provider gates remain open; none is promoted without full stream evidence.
 - WeCima remains unusable from hosted runtime due its specifically verified Cloudflare challenge; ArabSeed category paths are challenged; SyriaLive independence remains unproven.
-- The new FaselHD candidate is only quarantined; no live evidence exists yet.
+- The new FaselHD candidate is only quarantined; it now reaches the identity probe but still has no live evidence.
 - Security closure, Stremio runtime proof, licensing/dependency audit and release artifacts remain open.
 
 ## Next target
-Stay on PR #26. Re-run/inspect exact-head CI for `5b53cfb90f4ec8870fe79369cd637d8bbce5e2dd`. Use the first precise provider failure stage to test the new FaselHD candidate and continue strict runtime gates without waivers.
+Stay on PR #26. Inspect the exact-head CI for `cbfcf9f5beca6338cf3b8b3eda72ffb8ff352e51`. Use the resulting FaselHD diagnostics to decide whether the candidate is a real parser/runtime path or should be rejected, while continuing strict runtime gates without waivers.
