@@ -14,13 +14,20 @@ export class AkwamProvider extends BaseProvider {
 
   constructor() { super(); this.initLogger(); }
 
-  private siteRoot(baseUrl: string): string { return new URL(baseUrl).origin; }
-  private discoveryUrl(baseUrl: string, path: string): string { return `${this.siteRoot(baseUrl)}/${path.replace(/^\/+/, '')}`; }
+  private siteOrigin(baseUrl: string): string { return new URL(baseUrl).origin; }
+  private siteBase(baseUrl: string): string {
+    const parsed = new URL(baseUrl);
+    const pathname = parsed.pathname.replace(/\/+$/, '');
+    return pathname && pathname !== '/' ? `${parsed.origin}${pathname}` : parsed.origin;
+  }
+  private discoveryUrl(baseUrl: string, path: string): string {
+    return `${this.siteBase(baseUrl)}/${path.replace(/^\/+/, '')}`;
+  }
   private fixUrl(url?: string, baseUrl = this.mainUrl): string {
     if (!url) return '';
     if (url.startsWith('//')) return `https:${url}`;
     if (/^https?:\/\//i.test(url)) return url;
-    return new URL(url, `${this.siteRoot(baseUrl)}/`).toString();
+    return new URL(url, `${this.siteOrigin(baseUrl)}/`).toString();
   }
 
   private parseListing(resp: Awaited<ReturnType<HttpClient['get']>>, baseUrl: string, forcedType?: StremioContentType): ProviderItem[] {
