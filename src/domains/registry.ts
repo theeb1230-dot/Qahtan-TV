@@ -15,7 +15,7 @@ const baseConfigs: Record<string, ProviderDomainConfig> = {
   faselhd:{providerId:'faselhd',primary:'https://www.fasel-hd.co',fallbacks:['https://www.fasel-hd.com'],candidates:[],lastKnownGood:null,health:'unknown',lastCheckedAt:null,identityHints:['fasel','فاصل']},
   // The public landing page currently points users to official ArabSeed entry points on arabseed.in and m.arabseed.wine.
   // Keep both as quarantined candidates only; runtime identity, parser prerequisites and full E2E are still mandatory before promotion.
-  arabseed:{providerId:'arabseed',primary:'https://www.arabseed.wine',fallbacks:[],candidates:['https://arabseed.in','https://m.arabseed.wine'],lastKnownGood:null,health:'unknown',identityHints:['arabseed','عرب سيد']},
+  arabseed:{providerId:'arabseed',primary:'https://www.arabseed.wine',fallbacks:[],candidates:['https://arabseed.in','https://m.arabseed.wine'],lastKnownGood:null,health:'unknown',lastCheckedAt:null,identityHints:['arabseed','عرب سيد']},
   // Runtime discovery, canonical /anime/ pages and parser prerequisites live at the origin root.
   // /home8/ was a historical landing path and must not be treated as the operational domain identity.
   anime4up:{providerId:'anime4up',primary:'https://w1.anime4up.rest',fallbacks:[],candidates:[],lastKnownGood:null,health:'unknown',lastCheckedAt:null,identityHints:['anime4up']},
