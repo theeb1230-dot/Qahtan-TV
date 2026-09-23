@@ -2,18 +2,18 @@
 
 ## Current cycle
 - Start/main SHA: `003f167613133054c4e08e257830822c012e0560`; default branch `main`.
-- Single active PR: #26 `qahtan/p0-runtime-faselhd-evidence`; work remains on this branch only. PR is open and currently mergeable after the latest branch update.
-- Cycle-start PR head: `3e480c95226c7dd55dc83485088d89b4d3ae38c8`.
-- Latest completed exact-head CI: run `35814298022` on merge ref `65833cc1f4785f19f743b5f6149bd1e60d42d372` for PR head `3e480c95226c7dd55dc83485088d89b4d3ae38c8` completed red because TypeScript lint/compile failed before runtime tests.
-- Root cause fixed in this cycle: `src/domains/registry.ts` ArabSeed `ProviderDomainConfig` omitted required `lastCheckedAt`; this caused `TS2741` and skipped all runtime checks. Fix commit: `330ab2053be0314d4b45477283a9786f7b4a27c1`.
-- The failed run still confirms the workflow reached install successfully, then stopped at `npm run lint`; tests/build/provider runtime steps were skipped. The later strict outcome checks failed as expected because their outcomes were `skipped`.
-- Prior completed evidence remains unchanged until a new exact-head run proves otherwise: Akwam and Yacine Working; WeCima exact degraded contract; ArabSeed/FaselHD/Anime4Up/WitAnime/3isk/EgyDead strict gates open.
+- Single active PR: #26 `qahtan/p0-runtime-faselhd-evidence`; work remains on this branch only. PR is open and currently mergeable.
+- Current PR head at inspection: `5b53cfb90f4ec8870fe79369cd637d8bbce5e2dd`.
+- Latest completed exact-head CI: run `35818376441` on merge ref `ae50cdf2415966a998eaf12fef775e03eaf8d810`; install/lint/tests/build succeeded and Akwam/Yacine/WeCima degraded/ArabSeed/FaselHD/Anime4Up/WitAnime/3isk/EgyDead runtime steps executed.
+- Root cause of current red state: the six strict runtime outcome gates for ArabSeed, FaselHD, Anime4Up, WitAnime, 3isk and EgyDead remain red. The run did not fail at compile/test/build.
+- Runtime evidence from this run: Akwam Working (5 safe streams); Yacine Working (1 safe stream); WeCima degraded with `403 + cf-mitigated=challenge`; ArabSeed home reachable but category paths challenged; FaselHD, Anime4Up, WitAnime, 3isk and EgyDead identity/parser contracts unverified from the hosted runner.
+- New code change in this cycle: add `https://fasellhd.rest/main` as a quarantined FaselHD candidate only. It is not primary/fallback/lastKnownGood and earns no runtime credit until full evidence passes.
 
 ## Blockers ordered by release impact
 ### P0
-1. Exact-head CI for `330ab2053be0314d4b45477283a9786f7b4a27c1`; runtime gates must execute again after the compile fix.
-2. FaselHD, ArabSeed, Anime4Up, WitAnime, 3isk and EgyDead full E2E with evidence-based classification. A provider is not Working from HTTP 200 alone.
-3. WeCima must remain degraded only for the specific verified Cloudflare challenge contract; no bypass.
+1. Prove or reject `fasellhd.rest/main` through identity → parser prerequisites → discovery/catalog → metadata/details → episodes when applicable → safe non-empty HTTP(S) streams.
+2. ArabSeed, Anime4Up, WitAnime, 3isk and EgyDead full E2E with evidence-based classification. A provider is not Working from HTTP 200 alone.
+3. WeCima must remain degraded only for the verified Cloudflare challenge contract; no bypass.
 4. SyriaLive independent source/contract proof or remain Broken/degraded; never alias Yacine.
 5. Tuktuk candidate remains quarantined pending identity/content/parser proof.
 6. Backend security closure: SSRF, redirect/DNS rebinding, URL credentials/schemes, cookie isolation, bounded timeouts/retries/body limits, production CORS/PORT, streaming backpressure and Range/206.
@@ -28,19 +28,21 @@ UX/polish only after P0/P1.
 
 ## Acceptance criteria
 - Closed from completed evidence: Akwam real safe stream path; Yacine runtime regression; exact WeCima Cloudflare-only degraded contract; tested DomainRegistry/provider-health foundation; compile regression on ArabSeed registry config fixed.
-- Open: exact-head runtime rerun; ArabSeed/FaselHD/Anime4Up/WitAnime/3isk/EgyDead full E2E; remaining security/Stremio/release gates.
-- No provider promotion or CI waiver is introduced by the compile fix.
+- Open: full runtime proof for the remaining strict providers; security/Stremio/release gates.
+- No provider promotion or CI waiver is introduced by the FaselHD candidate addition.
 
 ## CI / tests / artifacts
-- Run `35814298022` on merge ref `65833cc1f4785f19f743b5f6149bd1e60d42d372`: `npm install` green; `npm run lint` failed at `src/domains/registry.ts(18,3)` with `TS2741` because `lastCheckedAt` was missing from the ArabSeed config; tests/build/runtime were skipped; strict outcome checks then failed on `skipped` outcomes.
-- Commit `330ab2053be0314d4b45477283a9786f7b4a27c1`: restores the required `lastCheckedAt: null` field on the ArabSeed domain config. Exact-head CI for this new head is not yet available, so it receives no new runtime credit.
+- Run `35818376441` on merge ref `ae50cdf2415966a998eaf12fef775e03eaf8d810`: npm install, lint, 26/26 tests, security contracts and production build were green.
+- Runtime outputs: Akwam `Working`, catalog 24, metadata true, episodes 2, streams 5, unsafe streams 0; Yacine `Working`, catalog 186, metadata true, streams 1, unsafe streams 0; WeCima `Broken` with expected degraded reason `cloudflare-challenge`, status 403, finalHost `wecima.cx`, `cf-mitigated=challenge`; ArabSeed `home-reachable-category-paths-challenged`; FaselHD/Anime4Up/WitAnime/3isk/EgyDead `Broken`/identity verification failed at hosted runner.
+- Strict outcome checks for ArabSeed/FaselHD/Anime4Up/WitAnime/3isk/EgyDead failed as intended; no waiver was added.
+- New code commit: `fefa3a64a20abf030fa9b0d13a1e126690399fc0` adds the quarantined FaselHD candidate.
 - Releases/artifacts: none release-ready.
 
 ## Provider/domain health
 - Working on completed runtime evidence: Akwam, Yacine TV.
 - Partial/unverified: ArabSeed, FaselHD, Anime4Up, WitAnime, 3isk, EgyDead.
 - Broken/degraded: WeCima (verified Cloudflare challenge only), SyriaLive.
-- Quarantined and excluded from the ten-provider denominator: Tuktuk candidate.
+- Quarantined and excluded from the ten-provider denominator: Tuktuk candidate; FaselHD `fasellhd.rest/main` candidate.
 
 ## Weighted verified completion
 | Category | Weight | Verified fraction | Earned |
@@ -67,10 +69,10 @@ UX/polish only after P0/P1.
 **D) Beta Readiness: 55.0%.** Broad provider/runtime and release gates remain open.
 
 ## Risks / what does not work
-- The latest exact-head run was blocked by a compile regression, so no fresh provider runtime evidence exists for the new branch head yet.
 - Six strict provider gates remain open; none is promoted without full stream evidence.
 - WeCima remains unusable from hosted runtime due its specifically verified Cloudflare challenge; ArabSeed category paths are challenged; SyriaLive independence remains unproven.
+- The new FaselHD candidate is only quarantined; no live evidence exists yet.
 - Security closure, Stremio runtime proof, licensing/dependency audit and release artifacts remain open.
 
 ## Next target
-Stay on PR #26. Inspect exact-head CI for `330ab2053be0314d4b45477283a9786f7b4a27c1`. If lint/tests/build recover, use the first precise provider failure stage to fix the highest shared defect, then continue the strict runtime gates without waivers.
+Stay on PR #26. Re-run/inspect exact-head CI for `5b53cfb90f4ec8870fe79369cd637d8bbce5e2dd`. Use the first precise provider failure stage to test the new FaselHD candidate and continue strict runtime gates without waivers.
