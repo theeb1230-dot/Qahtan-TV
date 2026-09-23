@@ -51,6 +51,7 @@ export class FaselhdProvider extends BaseProvider {
       'fasel-hd.com',
       // Quarantined fallback candidate: it must still pass the same identity/parser checks below.
       'fasellhd.rest',
+      'fasellhd.baby',
     ]);
     const parsedBase = new URL(baseUrl);
     if (!allowedHosts.has(parsedBase.hostname)) {
@@ -62,16 +63,28 @@ export class FaselhdProvider extends BaseProvider {
       const landing = await this.http.get(`${baseUrl}/`, { headers, timeout: 7000 });
       const landingBrand = this.brandVerified(landing.$);
       const landingContract = this.parserContractVerified(landing.$);
-      this.logger.debug(`FaselHD identity landing status=${landing.status} finalHost=${new URL(landing.url).hostname} brand=${landingBrand} parserContract=${landingContract} bytes=${landing.text.length}`);
+      const effectiveBaseUrl = (() => {
+        try {
+          const resolved = new URL(landing.url);
+          return `${resolved.origin}${resolved.pathname.endsWith('/') ? resolved.pathname.slice(0, -1) : resolved.pathname}`;
+        } catch {
+          return baseUrl.replace(/\/$/, '');
+        }
+      })();
+      const effectiveHost = new URL(effectiveBaseUrl).hostname;
+      this.logger.debug(`FaselHD identity landing status=${landing.status} finalHost=${effectiveHost} brand=${landingBrand} parserContract=${landingContract} bytes=${landing.text.length}`);
       if (landing.status >= 200 && landing.status < 400 && landingBrand && landingContract) return true;
       if (landing.status < 200 || landing.status >= 400) return false;
 
+      // Redirected candidate domains can land on a current first-party host. Probe sitemaps on
+      // the effective origin instead of the stale pre-redirect candidate, while requiring the
+      // content sample to remain same-host and brand/parser verified.
       const sitemapSeeds = ['/wp-sitemap.xml', '/sitemap_index.xml', '/wp-sitemap-posts-post-1.xml', '/post-sitemap.xml'];
       const checked = new Set<string>();
-      const sitemapQueue = sitemapSeeds.map((path) => `${baseUrl}${path}`);
+      const sitemapQueue = sitemapSeeds.map((path) => `${effectiveBaseUrl}${path}`);
       let contentCandidate = '';
 
-      while (sitemapQueue.length && checked.size < 6 && !contentCandidate) {
+      while (sitemapQueue.length && checked.size < 8 && !contentCandidate) {
         const sitemapUrl = sitemapQueue.shift()!;
         if (checked.has(sitemapUrl)) continue;
         checked.add(sitemapUrl);
@@ -83,16 +96,16 @@ export class FaselhdProvider extends BaseProvider {
           contentCandidate = locations.find((url) => {
             try {
               const parsed = new URL(url);
-              return parsed.hostname === new URL(baseUrl).hostname && /\/video\//i.test(parsed.pathname);
+              return parsed.hostname === effectiveHost && /\/video\//i.test(parsed.pathname);
             } catch { return false; }
           }) || '';
           if (!contentCandidate) {
             for (const location of locations) {
               try {
                 const parsed = new URL(location);
-                if (parsed.hostname === new URL(baseUrl).hostname && /sitemap.*\.xml|wp-sitemap.*\.xml/i.test(parsed.pathname) && !checked.has(location)) sitemapQueue.push(location);
+                if (parsed.hostname === effectiveHost && /sitemap.*\.xml|wp-sitemap.*\.xml/i.test(parsed.pathname) && !checked.has(location)) sitemapQueue.push(location);
               } catch {}
-              if (sitemapQueue.length >= 8) break;
+              if (sitemapQueue.length >= 10) break;
             }
           }
         } catch (err) {
@@ -107,7 +120,7 @@ export class FaselhdProvider extends BaseProvider {
       const sample = await this.http.get(contentCandidate, { headers, timeout: 7000 });
       const sampleBrand = this.brandVerified(sample.$);
       const sampleContract = this.parserContractVerified(sample.$);
-      this.logger.debug(`FaselHD identity sample status=${sample.status} path=${new URL(contentCandidate).pathname} brand=${sampleBrand} parserContract=${sampleContract} bytes=${sample.text.length}`);
+      this.logger.debug(`FaselHD identity sample status=${sample.status} host=${new URL(contentCandidate).hostname} path=${new URL(contentCandidate).pathname} brand=${sampleBrand} parserContract=${sampleContract} bytes=${sample.text.length}`);
       return sample.status >= 200 && sample.status < 400 && sampleBrand && sampleContract;
     } catch (err) {
       this.logger.debug(`FaselHD identity probe failed for ${baseUrl}: ${(err as Error).message}`);
