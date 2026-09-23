@@ -19,9 +19,9 @@ const baseConfigs: Record<string, ProviderDomainConfig> = {
   // Runtime discovery, canonical /anime/ pages and parser prerequisites live at the origin root.
   // /home8/ was a historical landing path and must not be treated as the operational domain identity.
   anime4up:{providerId:'anime4up',primary:'https://w1.anime4up.rest',fallbacks:[],candidates:[],lastKnownGood:null,health:'unknown',lastCheckedAt:null,identityHints:['anime4up']},
-  // witanime.club is only a quarantined candidate discovered from current public references.
+  // witanime.ws is quarantined as a candidate discovered from current public references.
   // It must pass identity, parser prerequisites and full runtime E2E before any promotion.
-  witanime:{providerId:'witanime',primary:'https://witanime.you',fallbacks:['https://ristoanime.me'],candidates:['https://witanime.club'],lastKnownGood:'https://witanime.you',health:'unknown',lastCheckedAt:null,identityHints:['anime','انمي']},
+  witanime:{providerId:'witanime',primary:'https://witanime.you',fallbacks:['https://ristoanime.me'],candidates:['https://witanime.club','https://witanime.ws'],lastKnownGood:'https://witanime.you',health:'unknown',lastCheckedAt:null,identityHints:['anime','انمي']},
   '3isk':{providerId:'3isk',primary:'https://3iskk.xyz',fallbacks:['https://e.3cktv.com'],candidates:[],lastKnownGood:'https://3iskk.xyz',health:'unknown',lastCheckedAt:null,identityHints:['قصة عشق','3isk']},
   egydead:{providerId:'egydead',primary:'https://tv10.egydead.live/h3/',fallbacks:[],candidates:[],lastKnownGood:'https://tv10.egydead.live/h3/',health:'unknown',lastCheckedAt:null,identityHints:['egydead','ايجي']},
   tuktuk_candidate:{providerId:'tuktuk_candidate',primary:'https://zx33.tuktuk-sa.online',fallbacks:[],candidates:[],lastKnownGood:null,health:'unknown',lastCheckedAt:null,identityHints:[]},
