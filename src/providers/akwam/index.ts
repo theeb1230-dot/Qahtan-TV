@@ -50,7 +50,7 @@ export class AkwamProvider extends BaseProvider {
 
   async searchInternal(query: string): Promise<ProviderItem[]> {
     return this.withHealthyDomain(async (baseUrl) => {
-      const resp = await this.http.get(this.discoveryUrl(baseUrl, `search?q=${encodeURIComponent(query)}`), { retries: 1, retryDelayMs: 350 });
+      const resp = await this.http.get(this.discoveryUrl(baseUrl, `search?q=${encodeURIComponent(query)}`), { timeout: 30000, retries: 2, retryDelayMs: 500 });
       const items = this.parseListing(resp, baseUrl);
       return { value: items, identityVerified: items.length > 0 };
     });
@@ -58,7 +58,7 @@ export class AkwamProvider extends BaseProvider {
   async getCatalogInternal(type: StremioContentType, page = 1): Promise<ProviderItem[]> {
     return this.withHealthyDomain(async (baseUrl) => {
       const path = type === 'series' ? 'series' : 'movies';
-      const resp = await this.http.get(this.discoveryUrl(baseUrl, `${path}${page > 1 ? `?page=${page}` : ''}`), { retries: 1, retryDelayMs: 350 });
+      const resp = await this.http.get(this.discoveryUrl(baseUrl, `${path}${page > 1 ? `?page=${page}` : ''}`), { timeout: 30000, retries: 2, retryDelayMs: 500 });
       const items = this.parseListing(resp, baseUrl, type);
       return { value: items, identityVerified: items.length > 0 };
     });
