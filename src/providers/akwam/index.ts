@@ -31,28 +31,47 @@ export class AkwamProvider extends BaseProvider {
   }
 
   private parseListing(resp: Awaited<ReturnType<HttpClient['get']>>, baseUrl: string, forcedType?: StremioContentType): ProviderItem[] {
-    const items: ProviderItem[] = []; const seen = new Set<string>();
-    resp.$('a[href*="/movie/"], a[href*="/series/"]').each((_, el) => {
-      const href = resp.$(el).attr('href'); if (!href) return;
-      const absolute = this.fixUrl(href, baseUrl); if (seen.has(absolute)) return;
-      const card = resp.$(el).closest('article, .entry-box, .col-lg-auto, .col-md-4, .col-6, li, div');
-      const title = (resp.$(el).attr('title') || card.find('h1,h2,h3,h4,.entry-title').first().text() || resp.$(el).text()).trim(); if (!title) return;
-      seen.add(absolute); const image = card.find('img').first(); const poster = this.fixUrl(image.attr('data-src') || image.attr('src'), baseUrl);
-      const type: StremioContentType = forcedType || (absolute.includes('/series/') ? 'series' : 'movie'); const yearMatch = card.text().match(/\b(19\d\d|20\d\d)\b/);
+    const items: ProviderItem[] = [];
+    const seen = new Set<string>();
+    const anchors = resp.$('.widget-body .entry-box a.box, .widget-body .entry-box a[href], .entry-box a.box, .entry-box a[href]');
+    anchors.each((_, el) => {
+      const href = resp.$(el).attr('href');
+      if (!href) return;
+      const absolute = this.fixUrl(href, baseUrl);
+      if (seen.has(absolute)) return;
+      const entry = resp.$(el).closest('.entry-box');
+      const title = (entry.find('.entry-title').first().text() || resp.$(el).attr('title') || resp.$(el).text()).trim();
+      if (!title || absolute === this.siteBase(baseUrl) || absolute.endsWith('/')) return;
+      const image = entry.find('img').first();
+      const poster = this.fixUrl(image.attr('data-src') || image.attr('src'), baseUrl);
+      const type: StremioContentType = forcedType || (/\/series(?:\/|$)/i.test(absolute) ? 'series' : 'movie');
+      const yearMatch = entry.text().match(/\b(19\d\d|20\d\d)\b/);
+      seen.add(absolute);
       items.push({ id: this.formatId(absolute), provider: this.name, type, title, poster, year: yearMatch ? parseInt(yearMatch[1], 10) : undefined, url: absolute });
-    }); return items;
+    });
+    return items;
   }
 
   private async withContentDomain<T>(contentId: string, attempt: (baseUrl: string, fullUrl: string) => Promise<T>): Promise<T> {
-    if (/^https?:\/\//i.test(contentId)) { const parsed = new URL(contentId); return attempt(parsed.origin, contentId); }
-    return this.withHealthyDomain(async (baseUrl) => { const value = await attempt(baseUrl, this.fixUrl(contentId, baseUrl)); return { value, identityVerified: value !== null && (!Array.isArray(value) || value.length > 0) }; });
+    if (/^https?:\/\//i.test(contentId)) {
+      const parsed = new URL(contentId);
+      return attempt(parsed.origin, contentId);
+    }
+    return this.withHealthyDomain(async (baseUrl) => {
+      const value = await attempt(baseUrl, this.fixUrl(contentId, baseUrl));
+      return { value, identityVerified: value !== null && (!Array.isArray(value) || value.length > 0) };
+    });
   }
 
   async searchInternal(query: string): Promise<ProviderItem[]> {
     return this.withHealthyDomain(async (baseUrl) => {
-      const resp = await this.http.get(this.discoveryUrl(baseUrl, `search?q=${encodeURIComponent(query)}`), { timeout: 30000, retries: 2, retryDelayMs: 500 });
-      const items = this.parseListing(resp, baseUrl);
-      return { value: items, identityVerified: items.length > 0 };
+      const items: ProviderItem[] = [];
+      for (const section of ['movie', 'series'] as const) {
+        const resp = await this.http.get(this.discoveryUrl(baseUrl, `search?q=${encodeURIComponent(query)}&section=${section}`), { timeout: 30000, retries: 2, retryDelayMs: 500 });
+        items.push(...this.parseListing(resp, baseUrl, section));
+      }
+      const unique = [...new Map(items.map((item) => [item.url || item.id, item])).values()];
+      return { value: unique, identityVerified: unique.length > 0 };
     });
   }
   async getCatalogInternal(type: StremioContentType, page = 1): Promise<ProviderItem[]> {
@@ -65,30 +84,58 @@ export class AkwamProvider extends BaseProvider {
   }
   async getMetaInternal(contentId: string, type: StremioContentType): Promise<ProviderDetail | null> {
     return this.withContentDomain(contentId, async (baseUrl, fullUrl) => {
-      const resp = await this.http.get(fullUrl); const title = resp.$('h1').first().text().trim() || resp.$('meta[property="og:title"]').attr('content')?.trim(); if (!title) return null;
-      const poster = this.fixUrl(resp.$('meta[property="og:image"]').attr('content') || resp.$('.picture img').attr('src') || resp.$('img').first().attr('src'), baseUrl); const description = resp.$('meta[name="description"]').attr('content') || resp.$('.widget-body p').first().text().trim(); const episodes: ProviderEpisode[] = [];
-      if (type === 'series') { const seen = new Set<string>(); resp.$('a[href*="/episode/"], a[href*="/episodes/"], a[href*="/watch/"]').each((idx, el) => { const epLink = resp.$(el).attr('href'); if (!epLink) return; const absolute = this.fixUrl(epLink, baseUrl); if (seen.has(absolute)) return; const epTitle = (resp.$(el).attr('title') || resp.$(el).text() || `حلقة ${idx + 1}`).trim(); if (!/حلقة|episode/i.test(epTitle) && !/\/episodes?\//i.test(absolute)) return; seen.add(absolute); const epNumMatch = epTitle.match(/(?:حلقة|episode)\s*[:#-]?\s*(\d+)/i) || absolute.match(/episode[^/]*\/?(\d+)/i); const seasonNumMatch = epTitle.match(/(?:موسم|season)\s*(\d+)/i) || fullUrl.match(/season[^/]*\/?(\d+)/i); episodes.push({ id: this.formatId(absolute), title: epTitle, season: seasonNumMatch ? parseInt(seasonNumMatch[1], 10) : 1, episode: epNumMatch ? parseInt(epNumMatch[1], 10) : idx + 1, url: absolute, poster }); }); }
+      const resp = await this.http.get(fullUrl);
+      const title = resp.$('h1').first().text().trim() || resp.$('meta[property="og:title"]').attr('content')?.trim();
+      if (!title) return null;
+      const poster = this.fixUrl(resp.$('meta[property="og:image"]').attr('content') || resp.$('.picture img').attr('src') || resp.$('img').first().attr('src'), baseUrl);
+      const description = resp.$('meta[name="description"]').attr('content') || resp.$('.widget-body p').first().text().trim();
+      const episodes: ProviderEpisode[] = [];
+      if (type === 'series') {
+        const seen = new Set<string>();
+        resp.$('div.bg-primary2 h2.font-size-18 a, a[href*="/episode/"], a[href*="/episodes/"], a[href*="/watch/"]').each((idx, el) => {
+          const epLink = resp.$(el).attr('href');
+          if (!epLink) return;
+          const absolute = this.fixUrl(epLink, baseUrl);
+          if (seen.has(absolute)) return;
+          const epTitle = (resp.$(el).attr('title') || resp.$(el).text() || `حلقة ${idx + 1}`).trim();
+          const epNumMatch = epTitle.match(/(?:الحلقة|حلقة|episode|ep)\s*[:#-]?\s*(\d+)/i) || absolute.match(/episode[^/]*\/?(\d+)/i);
+          if (!epNumMatch && !/\/episodes?\//i.test(absolute) && !/\/watch\//i.test(absolute)) return;
+          seen.add(absolute);
+          episodes.push({ id: this.formatId(absolute), title: epTitle, season: 1, episode: epNumMatch ? parseInt(epNumMatch[1], 10) : idx + 1, url: absolute, poster });
+        });
+      }
       return { id: this.formatId(fullUrl), provider: this.name, type, title, poster, description, url: fullUrl, episodes: episodes.length ? episodes : undefined };
     });
   }
-
   async getStreamsInternal(contentId: string, _type: StremioContentType, episodeId?: string): Promise<ResolvedStream[]> {
     const target = episodeId || contentId;
     return this.withContentDomain(target, async (baseUrl, fullUrl) => {
-      const resp = await this.http.get(fullUrl); const streams: ResolvedStream[] = []; const directLinks = new Set<string>();
-      resp.$('a[href*="/watch/"], a[href*="/download/"], a[href*="/play/"]').each((_, el) => { const link = resp.$(el).attr('href'); if (link) directLinks.add(this.fixUrl(link, baseUrl)); });
-      const candidates = [...directLinks].slice(0, 6);
+      const resp = await this.http.get(fullUrl, { referer: fullUrl, timeout: 30000, retries: 1, retryDelayMs: 250 });
+      const streams: ResolvedStream[] = [];
+      const directLinks = new Set<string>();
+      resp.$('a[href*="/link/"], a[href*="/watch/"], a[href*="/download/"], a[href*="/play/"], a[href*="/quality/"]').each((_, el) => {
+        const link = resp.$(el).attr('href');
+        if (link) directLinks.add(this.fixUrl(link, baseUrl));
+      });
+      const candidates = [...directLinks].slice(0, 8);
       const resolved = await Promise.all(candidates.map(async (dl) => {
         const found: ResolvedStream[] = [];
         try {
-          const dlResp = await this.http.get(dl, { referer: fullUrl, timeout: 5000, retries: 1, retryDelayMs: 250 });
+          const dlResp = await this.http.get(dl, { referer: fullUrl, timeout: 10000, retries: 1, retryDelayMs: 250 });
           found.push(...await extractStreams(dl, fullUrl));
-          dlResp.$('a[href*=".mp4"], a[href*=".m3u8"], source[src], video[src]').each((_, a) => { const streamUrl = dlResp.$(a).attr('href') || dlResp.$(a).attr('src'); if (streamUrl) { const absolute = this.fixUrl(streamUrl, dl); found.push({ name: 'Akwam Direct', url: absolute, isM3u8: absolute.includes('.m3u8'), headers: { Referer: dl } }); } });
-        } catch (e) { this.logger.debug(`Error fetching Akwam playback page: ${(e as Error).message}`); }
+          dlResp.$('a[href*=".mp4"], a[href*=".m3u8"], a[href*="/download/"], source[src], video[src]').each((_, a) => {
+            const streamUrl = dlResp.$(a).attr('href') || dlResp.$(a).attr('src');
+            if (!streamUrl) return;
+            const absolute = this.fixUrl(streamUrl, dl);
+            found.push({ name: 'Akwam Direct', url: absolute, isM3u8: /\.m3u8(?:$|\?)/i.test(absolute), headers: { Referer: dl } });
+          });
+        } catch (e) {
+          this.logger.debug(`Error fetching Akwam playback page: ${(e as Error).message}`);
+        }
         return found;
       }));
       for (const batch of resolved) streams.push(...batch);
-      return [...new Map(streams.filter(s => /^https?:\/\//i.test(s.url)).map(s => [s.url, s])).values()];
+      return [...new Map(streams.filter((s) => /^https?:\/\//i.test(s.url)).map((s) => [s.url, s])).values()];
     });
   }
 }
