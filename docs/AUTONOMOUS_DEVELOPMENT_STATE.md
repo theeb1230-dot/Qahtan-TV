@@ -3,14 +3,14 @@
 ## Current cycle
 - Start/main SHA: `003f167613133054c4e08e257830822c012e0560`; default branch `main`.
 - Single active PR: #26 `qahtan/p0-runtime-faselhd-evidence`; all work remains on this branch only.
-- Head after this cycle's code changes: `765f40126caf95fc46a5ccb24762752cbe76b9bb`.
-- Exact-head workflow observed: run `35903351047`, merge ref `4b78a98358f2b8339ea6cf475cde8333f749e729`, completed `failure`.
+- Current PR head after this cycle: `0f6c292c72f1ff5ebc19c4b962324f8f089daff6`.
+- Exact-head workflow observed for prior head: run `35910207657`, merge ref `a18bbec6ac1bc0d9729c72da86d9e4143240a94b`, completed `failure`.
 - Static gates were green: install, lint, 26/26 tests, build.
-- Runtime failure remained at Akwam search after two bounded GET retries; the runner timed out on `https://akwam.ss/search?q=مسلسل` and marked the only Akwam domain dead. Yacine and all later provider runtime steps were skipped by fail-fast.
+- Runtime failure remained at Akwam search after bounded retries; the runner timed out on `https://akwam.ss/one/search?q=مسلسل` and marked the domain dead. Because the workflow used fail-fast on the first three runtime steps, later provider evidence was hidden.
 
 ## Blockers ordered by release impact
 ### P0
-1. Akwam discovery must use the configured `/one` base path consistently; fresh exact-head CI must prove search -> catalog -> metadata -> episodes where applicable -> non-empty safe HTTP(S) streams, with Yacine regression still green.
+1. Akwam discovery must prove search -> catalog -> metadata -> episodes where applicable -> non-empty safe HTTP(S) streams on the configured `/one` route; no stream=0 waiver.
 2. FaselHD stream resolution: identity -> parser prerequisites -> discovery/catalog -> metadata/details -> episodes when applicable -> non-empty safe HTTP(S) streams on the effective redirected origin.
 3. ArabSeed remains home-reachable but category paths are challenged; do not bypass or classify as Working.
 4. Anime4Up, WitAnime, 3isk and EgyDead need independent identity and runtime evidence before promotion.
@@ -30,21 +30,20 @@ UX/polish only after P0/P1.
 - No provider promotion or CI waiver introduced.
 
 ## Work performed this cycle
-- Re-read repository metadata, PR #26, exact-head workflow `35903351047`, job `107324767163`, and the complete job log.
-- Confirmed the retry policy was exercised but Akwam still timed out twice, while install/lint/tests/build remained green.
-- Identified a product-level routing defect: `mainUrl` is `https://akwam.ss/one`, but discovery requests were built from the bare origin (`https://akwam.ss/search`), discarding the configured `/one` base path.
-- Corrected `src/providers/akwam/index.ts` so discovery routes preserve the configured base path while content/media URLs still resolve against the origin safely.
+- Re-read repository metadata, PR #26, exact-head workflow `35910207657`, job `107347831124`, and the complete job log.
+- Confirmed the corrected Akwam route is now used (`https://akwam.ss/one/search?...`) but still times out in the hosted runner; this is not yet enough to prove a parser regression or to justify changing the provider contract.
+- Changed `.github/workflows/ci.yml` so Akwam, Yacine TV and WeCima runtime steps also use `continue-on-error: true` with explicit strict `P0 require ... success` steps afterward. This preserves a red gate while ensuring later providers run and produce independent evidence instead of being hidden by fail-fast.
 - No runtime waiver, no stream=0 waiver, no provider reclassification, and no new PR.
 
 ## CI / tests / artifacts
-- Previous exact-head run `35903351047`, merge ref `4b78a98358f2b8339ea6cf475cde8333f749e729`: install green; lint green; 26/26 tests green; build green; Akwam runtime failed after bounded retries on timeout; later runtime steps fail-fast skipped.
-- New code commit: `765f40126caf95fc46a5ccb24762752cbe76b9bb` (preserve Akwam `/one` base path for discovery).
-- Exact-head CI for `765f40126caf95fc46a5ccb24762752cbe76b9bb` was not yet observed at end of cycle.
+- Prior exact-head run `35910207657`, merge ref `a18bbec6ac1bc0d9729c72da86d9e4143240a94b`: install green; lint green; 26/26 tests green; build green; Akwam runtime failed after timeout on `/one/search`; later runtime steps were skipped by fail-fast.
+- Workflow hardening commit: `0f6c292c72f1ff5ebc19c4b962324f8f089daff6` (collect independent provider evidence before strict require gates).
+- Exact-head CI for `0f6c292c72f1ff5ebc19c4b962324f8f089daff6` was not yet observed at end of cycle.
 - Releases/artifacts: none release-ready.
 
 ## Provider/domain health
 - Working on previously completed runtime evidence: Akwam, Yacine TV.
-- Current exact-head evidence: Akwam still failed at search timeout on the old bare-origin route; this cycle corrected the route construction but creates no new runtime credit until CI proves it.
+- Current exact-head evidence: Akwam still failed at search timeout, now on the corrected `/one` route; no new runtime credit is granted until a fresh CI run proves the full path.
 - Partial: FaselHD; prior evidence reached identity/catalog/meta/episodes but streams were empty before extractor repair.
 - Broken/degraded: WeCima (verified Cloudflare challenge only), ArabSeed (category challenge), Anime4Up, WitAnime, 3isk, EgyDead, SyriaLive.
 - Quarantined and excluded from the ten-provider denominator: Tuktuk candidate.
@@ -65,17 +64,17 @@ UX/polish only after P0/P1.
 | Observability/performance/error isolation | 3 | 0.60 | 1.8 |
 | Release gate/artifact/runtime readiness | 7 | 0.40 | 2.8 |
 
-**A) Overall Verified Product Completion: 57.9%.** No increase this cycle: the base-path correction is implementation hardening, not runtime evidence; exact-head CI is still pending.
+**A) Overall Verified Product Completion: 57.9%.** No increase this cycle: workflow observability hardening does not create runtime evidence; exact-head CI is still pending.
 **B) Runtime-Verified Provider Completion: 2/10 = 20.0%.** Working from completed evidence: Akwam, Yacine TV. Partial: FaselHD. Broken/degraded/unverified: ArabSeed, WeCima, Anime4Up, WitAnime, 3isk, EgyDead, SyriaLive.
 **C) Release Gate Completion: 3/7 = 42.9%.** Fixed denominator seven.
 **D) Beta Readiness: 53.0%.** No increase until exact-head CI and runtime evidence are green.
 
 ## Risks / what does not work
-- The newest code has not yet been validated by exact-head CI.
-- Akwam may still fail if the hosted runner cannot reach the corrected `/one` routes; the runtime gate remains strict.
+- The newest workflow hardening has not yet been validated by exact-head CI.
+- Akwam may still fail if the hosted runner cannot reach the corrected `/one` route; the runtime gate remains strict.
 - FaselHD stream output is still unproven after repair until a fresh exact-head runtime run completes.
 - WeCima remains unusable from hosted runtime due verified Cloudflare challenge; ArabSeed category paths are challenged; SyriaLive independence remains unproven.
 - Security closure, Stremio runtime proof, licensing/dependency audit and release artifacts remain open.
 
 ## Next target
-Stay on PR #26. Read the new exact-head CI for `765f40126caf95fc46a5ccb24762752cbe76b9bb`. If Akwam passes, inspect Yacine and then FaselHD from metadata through non-empty safe stream. If Akwam still fails, use fresh logs to decide whether the remaining issue is runner reachability or another product-level route/health defect; do not weaken acceptance or waive streams. Merge only after exact-head CI is green and the PR is mergeable.
+Stay on PR #26. Read the new exact-head CI for `0f6c292c72f1ff5ebc19c4b962324f8f089daff6`. Use the independent provider steps to classify Akwam/Yacine/WeCima/remaining providers from fresh evidence. If Akwam still fails, use its fresh log plus the later provider outcomes to decide whether the remaining issue is runner reachability or another product-level defect; do not weaken acceptance or waive streams. Merge only after every strict require gate is green and the PR is mergeable.
