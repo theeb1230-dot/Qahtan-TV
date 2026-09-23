@@ -11,8 +11,8 @@ const baseConfigs: Record<string, ProviderDomainConfig> = {
   syrialive:{providerId:'syrialive',primary:'https://www.mewsry.live',fallbacks:[],candidates:[],lastKnownGood:'https://www.mewsry.live',health:'unknown',lastCheckedAt:null,identityHints:['match','مباراة','مباريات']},
   wecima:{providerId:'wecima',primary:'https://wecima.cx',fallbacks:[],candidates:[],lastKnownGood:'https://wecima.cx',health:'unknown',lastCheckedAt:null,identityHints:['wecima','وي سيما']},
   // fasel-hd.com currently challenges hosted automation while fasel-hd.co exposes the live FaselHD catalog contract.
-  // Keep the challenged origin only as a fallback; it still requires the provider's identity/parser proof before promotion.
-  faselhd:{providerId:'faselhd',primary:'https://www.fasel-hd.co',fallbacks:['https://www.fasel-hd.com'],candidates:[],lastKnownGood:null,health:'unknown',lastCheckedAt:null,identityHints:['fasel','فاصل']},
+  // Keep the challenged origins as fallbacks/candidates; promotion still requires provider identity/parser proof before use.
+  faselhd:{providerId:'faselhd',primary:'https://www.fasel-hd.co',fallbacks:['https://www.fasel-hd.com'],candidates:['https://fasellhd.rest/main'],lastKnownGood:null,health:'unknown',lastCheckedAt:null,identityHints:['fasel','فاصل']},
   // The public landing page currently points users to official ArabSeed entry points on arabseed.in and m.arabseed.wine.
   // Keep both as quarantined candidates only; runtime identity, parser prerequisites and full E2E are still mandatory before promotion.
   arabseed:{providerId:'arabseed',primary:'https://www.arabseed.wine',fallbacks:[],candidates:['https://arabseed.in','https://m.arabseed.wine'],lastKnownGood:null,health:'unknown',lastCheckedAt:null,identityHints:['arabseed','عرب سيد']},
