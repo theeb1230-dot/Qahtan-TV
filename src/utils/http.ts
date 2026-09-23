@@ -8,6 +8,8 @@ export interface HttpRequestOptions {
   referer?: string;
   cookies?: string;
   timeout?: number;
+  retries?: number;
+  retryDelayMs?: number;
   body?: any;
   method?: 'GET' | 'POST' | 'HEAD';
   form?: Record<string, string>;
@@ -37,6 +39,8 @@ function encodeUrlHeader(value: string): string {
     return value;
   }
 }
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export class HttpClient {
   private defaultHeaders: Record<string, string>;
@@ -118,36 +122,26 @@ export class HttpClient {
   }
 
   async request<T = any>(url: string, options: HttpRequestOptions = {}): Promise<HttpResponse<T>> {
-    const controller = new AbortController();
     const timeout = options.timeout || 15000;
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    const method = options.method || (options.form || options.body ? 'POST' : 'GET');
+    const retries = method === 'GET' || method === 'HEAD' ? Math.max(0, Math.min(2, options.retries ?? 0)) : 0;
+    const retryDelayMs = Math.max(0, Math.min(5000, options.retryDelayMs ?? 400));
 
     const headers: Record<string, string> = {
       ...this.defaultHeaders,
       ...(options.headers || {}),
     };
 
-    if (options.referer) {
-      // WHATWG fetch requires ByteString-compatible header values. Provider URLs
-      // legitimately contain Arabic/non-ASCII slugs, so serialize URL headers
-      // to their percent-encoded wire form instead of rejecting the request.
-      headers['Referer'] = encodeUrlHeader(options.referer);
-    }
+    if (options.referer) headers['Referer'] = encodeUrlHeader(options.referer);
 
     const cookieHeader = [this.getCookieString(url), options.cookies].filter(Boolean).join('; ');
-    if (cookieHeader) {
-      headers['Cookie'] = cookieHeader;
-    }
+    if (cookieHeader) headers['Cookie'] = cookieHeader;
 
     let body: BodyInit | undefined = undefined;
-    const method = options.method || (options.form || options.body ? 'POST' : 'GET');
-
     if (options.form) {
       headers['Content-Type'] = 'application/x-www-form-urlencoded; charset=UTF-8';
       const searchParams = new URLSearchParams();
-      for (const [key, value] of Object.entries(options.form)) {
-        searchParams.append(key, value);
-      }
+      for (const [key, value] of Object.entries(options.form)) searchParams.append(key, value);
       body = searchParams.toString();
     } else if (options.body) {
       if (typeof options.body === 'object' && !(options.body instanceof String)) {
@@ -158,50 +152,57 @@ export class HttpClient {
       }
     }
 
-    try {
-      const resp = await fetch(url, {
-        method,
-        headers,
-        body,
-        redirect: options.redirect || 'follow',
-        signal: controller.signal,
-      });
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      try {
+        const resp = await fetch(url, {
+          method,
+          headers,
+          body,
+          redirect: options.redirect || 'follow',
+          signal: controller.signal,
+        });
 
-      const responseHeaders: Record<string, string> = {};
-      resp.headers.forEach((val, key) => {
-        responseHeaders[key.toLowerCase()] = val;
-      });
+        const responseHeaders: Record<string, string> = {};
+        resp.headers.forEach((val, key) => { responseHeaders[key.toLowerCase()] = val; });
+        const setCookies = typeof resp.headers.getSetCookie === 'function'
+          ? resp.headers.getSetCookie()
+          : [resp.headers.get('set-cookie')].filter((value): value is string => Boolean(value));
+        for (const setCookie of setCookies) this.captureSetCookie(setCookie, resp.url);
 
-      const setCookies = typeof resp.headers.getSetCookie === 'function'
-        ? resp.headers.getSetCookie()
-        : [resp.headers.get('set-cookie')].filter((value): value is string => Boolean(value));
-      for (const setCookie of setCookies) this.captureSetCookie(setCookie, resp.url);
+        const text = await resp.text();
+        if (resp.status >= 500 && attempt < retries) {
+          await sleep(retryDelayMs * (attempt + 1));
+          continue;
+        }
 
-      const text = await resp.text();
-
-      return {
-        status: resp.status,
-        statusText: resp.statusText,
-        url: resp.url,
-        headers: responseHeaders,
-        text,
-        json: () => {
-          try {
-            return JSON.parse(text);
-          } catch (e) {
-            throw new Error(`Failed to parse JSON response: ${(e as Error).message}`);
-          }
-        },
-        $: cheerio.load(text),
-      };
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
-        throw new Error(`Request timed out after ${timeout}ms: ${url}`);
+        return {
+          status: resp.status,
+          statusText: resp.statusText,
+          url: resp.url,
+          headers: responseHeaders,
+          text,
+          json: () => {
+            try { return JSON.parse(text); }
+            catch (e) { throw new Error(`Failed to parse JSON response: ${(e as Error).message}`); }
+          },
+          $: cheerio.load(text),
+        };
+      } catch (err: any) {
+        lastError = err;
+        if (attempt >= retries) break;
+        await sleep(retryDelayMs * (attempt + 1));
+      } finally {
+        clearTimeout(timeoutId);
       }
-      throw err;
-    } finally {
-      clearTimeout(timeoutId);
     }
+
+    if (lastError && (lastError as any).name === 'AbortError') {
+      throw new Error(`Request timed out after ${timeout}ms: ${url}`);
+    }
+    throw lastError instanceof Error ? lastError : new Error(String(lastError));
   }
 
   async get<T = any>(url: string, options: Omit<HttpRequestOptions, 'method'> = {}): Promise<HttpResponse<T>> {
