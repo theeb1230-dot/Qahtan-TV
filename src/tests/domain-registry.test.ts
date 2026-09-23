@@ -10,11 +10,12 @@ export function runDomainRegistryTests(): void {
   assert.equal(domainRegistry.get('tuktuk_candidate')?.lastKnownGood, null);
   assert.equal(domainRegistry.get('tuktuk_candidate')?.health, 'unknown');
   assert.equal(domainRegistry.get('faselhd')?.primary, 'https://www.fasel-hd.co');
-  assert.deepEqual(domainRegistry.get('faselhd')?.fallbacks, ['https://www.fasel-hd.com']);
+  assert.deepEqual(domainRegistry.get('faselhd')?.fallbacks, ['https://www.fasel-hd.com', 'https://fasellhd.baby']);
   assert.deepEqual(domainRegistry.get('witanime')?.fallbacks, ['https://ristoanime.me']);
   assert.deepEqual(domainRegistry.get('3isk')?.fallbacks, ['https://e.3cktv.com']);
   assert.ok(domainRegistry.orderedUrls('faselhd').includes('https://www.fasel-hd.co'));
   assert.ok(domainRegistry.orderedUrls('faselhd').includes('https://www.fasel-hd.com'));
+  assert.ok(domainRegistry.orderedUrls('faselhd').includes('https://fasellhd.baby'));
   assert.equal(registry.getProvider('akwam')?.mainUrl, 'https://akwam.ss/one');
   assert.equal(registry.getProvider('wecima')?.mainUrl, 'https://wecima.cx');
   assert.equal(registry.getProvider('faselhd')?.mainUrl, 'https://www.fasel-hd.co');
