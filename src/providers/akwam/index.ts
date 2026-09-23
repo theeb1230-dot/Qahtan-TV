@@ -42,10 +42,19 @@ export class AkwamProvider extends BaseProvider {
   }
 
   async searchInternal(query: string): Promise<ProviderItem[]> {
-    return this.withHealthyDomain(async (baseUrl) => { const resp = await this.http.get(this.discoveryUrl(baseUrl, `search?q=${encodeURIComponent(query)}`)); const items = this.parseListing(resp, baseUrl); return { value: items, identityVerified: items.length > 0 }; });
+    return this.withHealthyDomain(async (baseUrl) => {
+      const resp = await this.http.get(this.discoveryUrl(baseUrl, `search?q=${encodeURIComponent(query)}`), { retries: 1, retryDelayMs: 350 });
+      const items = this.parseListing(resp, baseUrl);
+      return { value: items, identityVerified: items.length > 0 };
+    });
   }
   async getCatalogInternal(type: StremioContentType, page = 1): Promise<ProviderItem[]> {
-    return this.withHealthyDomain(async (baseUrl) => { const path = type === 'series' ? 'series' : 'movies'; const resp = await this.http.get(this.discoveryUrl(baseUrl, `${path}${page > 1 ? `?page=${page}` : ''}`)); const items = this.parseListing(resp, baseUrl, type); return { value: items, identityVerified: items.length > 0 }; });
+    return this.withHealthyDomain(async (baseUrl) => {
+      const path = type === 'series' ? 'series' : 'movies';
+      const resp = await this.http.get(this.discoveryUrl(baseUrl, `${path}${page > 1 ? `?page=${page}` : ''}`), { retries: 1, retryDelayMs: 350 });
+      const items = this.parseListing(resp, baseUrl, type);
+      return { value: items, identityVerified: items.length > 0 };
+    });
   }
   async getMetaInternal(contentId: string, type: StremioContentType): Promise<ProviderDetail | null> {
     return this.withContentDomain(contentId, async (baseUrl, fullUrl) => {
@@ -60,15 +69,12 @@ export class AkwamProvider extends BaseProvider {
     const target = episodeId || contentId;
     return this.withContentDomain(target, async (baseUrl, fullUrl) => {
       const resp = await this.http.get(fullUrl); const streams: ResolvedStream[] = []; const directLinks = new Set<string>();
-      // Some Akwam playback endpoints intermittently stall from datacenter networks. Resolve
-      // independent candidates concurrently with a short per-candidate budget so one dead
-      // /watch route cannot consume the entire provider runtime window before /download is tried.
       resp.$('a[href*="/watch/"], a[href*="/download/"], a[href*="/play/"]').each((_, el) => { const link = resp.$(el).attr('href'); if (link) directLinks.add(this.fixUrl(link, baseUrl)); });
       const candidates = [...directLinks].slice(0, 6);
       const resolved = await Promise.all(candidates.map(async (dl) => {
         const found: ResolvedStream[] = [];
         try {
-          const dlResp = await this.http.get(dl, { referer: fullUrl, timeout: 5000 });
+          const dlResp = await this.http.get(dl, { referer: fullUrl, timeout: 5000, retries: 1, retryDelayMs: 250 });
           found.push(...await extractStreams(dl, fullUrl));
           dlResp.$('a[href*=".mp4"], a[href*=".m3u8"], source[src], video[src]').each((_, a) => { const streamUrl = dlResp.$(a).attr('href') || dlResp.$(a).attr('src'); if (streamUrl) { const absolute = this.fixUrl(streamUrl, dl); found.push({ name: 'Akwam Direct', url: absolute, isM3u8: absolute.includes('.m3u8'), headers: { Referer: dl } }); } });
         } catch (e) { this.logger.debug(`Error fetching Akwam playback page: ${(e as Error).message}`); }
