@@ -17,6 +17,9 @@ export class AkwamProvider extends BaseProvider {
   private siteOrigin(baseUrl: string): string { return new URL(baseUrl).origin; }
   private siteBase(baseUrl: string): string {
     const parsed = new URL(baseUrl);
+    // The current akwams.org candidate exposes content from the origin root;
+    // retaining the historical /one suffix makes discovery resolve to dead paths.
+    if (parsed.hostname === 'akwams.org' || parsed.hostname.endsWith('.akwams.org')) return parsed.origin;
     const pathname = parsed.pathname.replace(/\/+$/, '');
     return pathname && pathname !== '/' ? `${parsed.origin}${pathname}` : parsed.origin;
   }
@@ -43,8 +46,8 @@ export class AkwamProvider extends BaseProvider {
     const html = resp.text.toLowerCase();
     const body = resp.$('body').text().replace(/\s+/g, ' ').trim().toLowerCase();
     return /akwam|أكوام/.test(`${title} ${html} ${body}`) && (
-      resp.$('a[href*="/movie/"], a[href*="/series/"], a[href*="/watch/"], a[href*="/episode/"], .entry-box, .film, .movie, article').length > 0
-      || /أفلام|مسلسلات|الحلقة|movie|series|episode/.test(body)
+      resp.$('a[href*="/movie/"], a[href*="/movies/"], a[href*="/series/"], a[href*="/watch/"], a[href*="/episode/"], a[href*="/episodes/"], .entry-box, .film, .movie, article').length > 0
+      || /أفلام|مسلسلات|الحلقة|movie|movies|series|episode/.test(body)
     );
   }
 
@@ -77,11 +80,13 @@ export class AkwamProvider extends BaseProvider {
       '.card a[href]',
       '.item a[href]',
       'a[href*="/movie/"]',
+      'a[href*="/movies/"]',
       'a[href*="/series/"]',
       'a[href*="/watch/"]',
       'a[href*="/episode/"]',
       'a[href*="/episodes/"]',
       'a[href*="movie"]',
+      'a[href*="movies"]',
       'a[href*="series"]',
       'a[href*="watch"]',
       'a[href*="episode"]',
@@ -90,6 +95,12 @@ export class AkwamProvider extends BaseProvider {
       const href = resp.$(el).attr('href');
       if (!href) return;
       const absolute = this.fixUrl(href, baseUrl);
+      let path = '';
+      try { path = new URL(absolute).pathname.toLowerCase(); } catch { return; }
+      // Category/navigation links are not content items. Accept only canonical
+      // content paths, otherwise /category/movies/ is misreported as a title.
+      if (/^\/category(?:\/|$)/i.test(path) || /^\/(?:movies?|series|films?|tv)\/?$/i.test(path)) return;
+      if (!/(?:\/movie(?:s)?\/|\/series\/|\/watch(?:\.php|\/)|\/episode(?:s)?\/)/i.test(path)) return;
       if (!absolute || seen.has(absolute) || absolute === this.siteBase(baseUrl) || absolute === `${this.siteBase(baseUrl)}/`) return;
       const entry = resp.$(el).closest('.entry-box, article, .post, .movie, .film, .film-poster, .post-item, li, .card, .item');
       const title = (
@@ -102,7 +113,7 @@ export class AkwamProvider extends BaseProvider {
       if (!title || title.length < 2) return;
       const image = entry.find('img').first();
       const poster = this.fixUrl(image.attr('data-src') || image.attr('data-lazy-src') || image.attr('src'), baseUrl);
-      const type: StremioContentType = forcedType || (/\/(?:series|episode|episodes)\b/i.test(absolute) ? 'series' : 'movie');
+      const type: StremioContentType = forcedType || (/\/(?:series|episode|episodes)\b/i.test(path) ? 'series' : 'movie');
       const yearMatch = entry.text().match(/\b(19\d\d|20\d\d)\b/);
       seen.add(absolute);
       items.push({ id: this.formatId(absolute), provider: this.name, type, title, poster, year: yearMatch ? parseInt(yearMatch[1], 10) : undefined, url: absolute });
@@ -114,7 +125,7 @@ export class AkwamProvider extends BaseProvider {
         if (!href) return;
         const absolute = this.fixUrl(href, baseUrl);
         const path = (() => { try { return new URL(absolute).pathname.toLowerCase(); } catch { return ''; } })();
-        if (!absolute || seen.has(absolute) || !/(?:\/movie\/|\/series\/|\/watch\/|\/episode[s]?\/)/i.test(path)) return;
+        if (!absolute || seen.has(absolute) || /^\/category(?:\/|$)/i.test(path) || !/(?:\/movie(?:s)?\/|\/series\/|\/watch(?:\.php|\/)|\/episode(?:s)?\/)/i.test(path)) return;
         const title = (resp.$(el).attr('title') || resp.$(el).attr('aria-label') || resp.$(el).text() || `Akwam ${idx + 1}`).replace(/\s+/g, ' ').trim();
         if (title.length < 2) return;
         seen.add(absolute);
@@ -177,6 +188,7 @@ export class AkwamProvider extends BaseProvider {
           this.discoveryUrl(baseUrl, `search?query=${encoded}&section=${section}`),
           this.discoveryUrl(baseUrl, `search?keyword=${encoded}&section=${section}`),
           this.discoveryUrl(baseUrl, `search/${encoded}?section=${section}`),
+          this.discoveryUrl(baseUrl, `?s=${encoded}`),
         ], section);
         items.push(...sectionItems);
       }
@@ -190,7 +202,7 @@ export class AkwamProvider extends BaseProvider {
       const identityVerified = await this.verifyIdentity(baseUrl);
       const suffix = page > 1 ? `?page=${page}` : '';
       const paths = type === 'series'
-        ? [`series${suffix}`, `series/${suffix}`, `tv${suffix}`]
+        ? [`series${suffix}`, `tv${suffix}`, `series-list${suffix}`]
         : [`movies${suffix}`, `movie${suffix}`, `films${suffix}`];
       const items = await this.fetchFirstListing(baseUrl, paths.map((path) => this.discoveryUrl(baseUrl, path)), type);
       return { value: items, identityVerified: identityVerified && items.length > 0 };
