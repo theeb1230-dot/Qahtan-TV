@@ -3,15 +3,15 @@
 ## Current cycle
 - Start/main SHA: `003f167613133054c4e08e257830822c012e0560`; default branch `main`.
 - Single active PR: #26 `qahtan/p0-runtime-faselhd-evidence`; all work remains on this branch only.
-- Exact PR head at start: `6e442436214e1010b4ce5cbd8866833dfd35d850`.
-- Latest completed exact-head workflow inspected: run `36013689514`, job `107680601663`.
-- PR remains open and non-mergeable after the failed runtime gate; no merge performed.
+- Exact PR head at start: `80f57bf7eb6564bab3cd6826ca861c27b57301a2`.
+- Latest completed exact-head workflow inspected: run `36020239004`, job `107702987928`.
+- PR remains open and mergeable before the new commit; no merge performed.
 - Static gates were green: install/lint/tests/build; tests `26/26`; npm install reported `0 vulnerabilities`.
 
 ## Blockers ordered by release impact
 ### P0
 1. Akwam must prove discovery -> catalog -> metadata -> episodes where applicable -> non-empty safe HTTP(S) streams. Latest runner evidence timed out on `/one` and produced no runtime item. No waiver.
-2. FaselHD reaches identity/search/catalog/meta/episodes on `fasellhd.baby`, but stream extraction still returns `streams=0` for three sampled series candidates. The current fix broadens player/server/media candidate extraction without weakening identity or safe-stream checks.
+2. FaselHD reaches identity/search/catalog/meta/episodes on `fasellhd.baby`, but stream extraction still returns `streams=0` for three sampled series candidates. The latest fix broadens the common extractor router to recognize bounded extensionless media/player URLs without weakening identity or safe-stream checks.
 3. ArabSeed remains home-reachable but category paths are Cloudflare challenged; do not bypass or classify as Working.
 4. Anime4Up, WitAnime, 3isk and EgyDead need independent identity and runtime evidence before promotion.
 5. WeCima is accepted only as degraded for the verified `403 + cf-mitigated=challenge` contract on `wecima.cx`.
@@ -25,24 +25,24 @@ Qahtan/3rb provenance and third-party LICENSE/NOTICE audit; dependency and TODO/
 UX/polish only after P0/P1.
 
 ## Acceptance criteria
-- Closed from completed evidence: tested DomainRegistry/provider-health foundation; exact WeCima Cloudflare-only degraded contract; fresh Yacine runtime path with one safe stream; latest static install/lint/tests/build gates; FaselHD identity/search/catalog/meta/episodes path is now demonstrated on the hosted runner.
+- Closed from completed evidence: tested DomainRegistry/provider-health foundation; exact WeCima Cloudflare-only degraded contract; fresh Yacine runtime path with one safe stream; latest static install/lint/tests/build gates; FaselHD identity/search/catalog/meta/episodes path is demonstrated on the hosted runner.
 - Open: fresh Akwam runtime with non-empty safe streams; fresh FaselHD non-empty safe streams; ArabSeed and remaining strict provider E2E gates; security/Stremio/release gates.
 - No provider promotion or CI waiver introduced.
 
 ## Work performed this cycle
-- Re-read repository metadata, PR #26, exact-head workflow `36013689514`, job `107680601663`, and the complete decoded job log.
-- Confirmed latest evidence: Yacine Working with `streams=1`; WeCima exact degraded contract; Akwam timed out before discovery; ArabSeed home reachable but category paths challenged; FaselHD reaches `search=64`, `catalog=64`, `meta=true`, and `episodes=87` on the sampled path, but `streams=0` for three candidates.
-- Implemented a common FaselHD stream/player extraction expansion in `src/providers/faselhd/index.ts`.
-- Candidate collection now also inspects `data-server`, `data-url`, `data-link`, `data-iframe`, `data-player`, server/button containers, inline onclick URLs, script payloads, escaped JSON URLs, and nested player pages under bounded limits.
+- Re-read repository metadata, PR #26, exact-head workflow `36020239004`, job `107702987928`, and the complete decoded job log.
+- Confirmed latest evidence: Yacine Working with `streams=1`; WeCima exact degraded contract; Akwam timed out before discovery; ArabSeed home reachable but category paths challenged; FaselHD reaches `search=65`, `catalog=64`, `meta=true`, and `episodes=87` on the sampled path, but `streams=0` for three candidates.
+- Implemented a common bounded extractor expansion in `src/extractors/index.ts`.
+- The extractor now recognizes direct media plus extensionless URLs carrying explicit media hints such as `manifest`, `playlist`, `stream`, `source`, `video`, `hls`, `dash`, or `file`, and scans keyed JSON/JS values in both original and unpacked payloads.
 - Media extraction remains HTTP(S)-only, deduplicated, referer-aware, bounded, and fail-closed. No Cloudflare/DRM/paywall/access-control bypass was added.
 - No provider promotion, no waiver, no new PR, and no merge.
 
 ## CI / tests / artifacts
-- Latest completed exact-head run inspected: `36013689514`, merge ref `812a73cd1bd9631730b15b632984affd935dac1f`.
+- Latest completed exact-head run inspected: `36020239004`, merge ref `1e00e4f320f76bef6a44d99bb3c3403787432bc8`.
 - Static gates: install/lint/tests/build green; tests `26/26`; npm install reported `0 vulnerabilities`.
-- Runtime results: Yacine Working; WeCima degraded contract green; Akwam Broken; ArabSeed challenged; FaselHD Partial with `search=64`, `catalog=64`, `meta=true`, `episodes=87`, `streams=0`; Anime4Up/WitAnime/3isk/EgyDead Broken/unverified.
-- New code commit: `db93d9384c979651302991d4a35b93e6d6e350cb` (`src/providers/faselhd/index.ts`).
-- No exact-head CI result exists yet for `db93d9384c979651302991d4a35b93e6d6e350cb` at the end of this cycle.
+- Runtime results: Yacine Working; WeCima exact degraded contract green; Akwam Broken; ArabSeed challenged; FaselHD Partial with `search=65`, `catalog=64`, `meta=true`, `episodes=87`, `streams=0`; Anime4Up/WitAnime/3isk/EgyDead Broken/unverified.
+- New code commit: `8c0dcd9a6c5a9077cdb594660b884b524d2d5210` (`src/extractors/index.ts`).
+- No exact-head CI result exists yet for `8c0dcd9a6c5a9077cdb594660b884b524d2d5210` at the end of this cycle.
 - No release-ready artifact claimed; no release published.
 
 ## Provider/domain health from the latest runtime-bearing run
@@ -68,16 +68,16 @@ UX/polish only after P0/P1.
 | Observability/performance/error isolation | 3 | 0.60 | 1.8 |
 | Release gate/artifact/runtime readiness | 7 | 0.40 | 2.8 |
 
-**A) Overall Verified Product Completion: 55.3%.** Metadata/episode evidence improved, but no new stream or provider runtime credit was granted.
+**A) Overall Verified Product Completion: 55.3%.** No new runtime stream credit was granted; the extractor change is unverified until exact-head CI completes.
 **B) Runtime-Verified Provider Completion: 1/10 = 10.0%.** Working: Yacine TV. Partial: FaselHD. Degraded: WeCima. Broken/unverified: Akwam, ArabSeed, Anime4Up, WitAnime, 3isk, EgyDead, SyriaLive.
 **C) Release Gate Completion: 3/7 = 42.9%.** Fixed denominator seven.
-**D) Beta Readiness: 45.8%.** FaselHD now reaches meta/episodes but still has no proven stream; no release artifact exists.
+**D) Beta Readiness: 45.8%.** FaselHD still has no proven stream; no release artifact exists.
 
 ## Risks / what does not work
-- The new FaselHD extraction expansion has not yet passed exact-head lint/tests/build/runtime.
+- The extractor expansion has not yet passed exact-head lint/tests/build/runtime.
 - FaselHD has no current Working evidence until at least one non-empty safe stream is proven after metadata/details succeed.
 - Akwam remains blocked before discovery on the hosted runner; WeCima remains unusable from hosted runtime due verified Cloudflare challenge; ArabSeed category paths are challenged; SyriaLive independence remains unproven.
 - Security closure, Stremio runtime proof, licensing/dependency audit and release artifacts remain open.
 
 ## Next target
-Stay on PR #26. Validate exact head `db93d9384c979651302991d4a35b93e6d6e350cb`. If static gates remain green, inspect fresh FaselHD candidate diagnostics and require a non-empty safe stream. If streams remain empty, use the next log to identify the actual player contract or response shape rather than adding more unbounded selectors. Retain strict Akwam identity/stream requirements, do not bypass Cloudflare/DRM/paywalls, and do not merge until every strict require gate is green and the PR is mergeable.
+Stay on PR #26. Validate exact head `8c0dcd9a6c5a9077cdb594660b884b524d2d5210`. If static gates remain green, inspect fresh FaselHD candidate diagnostics and require a non-empty safe stream. If streams remain empty, use the next log to identify the actual player contract or response shape rather than adding more unbounded selectors. Retain strict Akwam identity/stream requirements, do not bypass Cloudflare/DRM/paywalls, and do not merge until every strict require gate is green and the PR is mergeable.
