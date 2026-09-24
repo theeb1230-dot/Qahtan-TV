@@ -3,15 +3,15 @@
 ## Current cycle
 - Start/main SHA: `003f167613133054c4e08e257830822c012e0560`; default branch `main`.
 - Single active PR: #26 `qahtan/p0-runtime-faselhd-evidence`; all work remains on this branch only.
-- Exact PR head at start: `80f57bf7eb6564bab3cd6826ca861c27b57301a2`.
-- Latest completed exact-head workflow inspected: run `36020239004`, job `107702987928`.
-- PR remains open and mergeable before the new commit; no merge performed.
+- Exact PR head inspected before this cycle: `9d1f7ae3ab60b173bdcd2fc6b19d17caa1532398`.
+- Latest completed exact-head workflow inspected: run `36020239004`, job `107702987928`, merge ref `1e00e4f320f76bef6a44d99bb3c3403787432bc8`.
+- PR was open and mergeable before the new commit; no merge performed.
 - Static gates were green: install/lint/tests/build; tests `26/26`; npm install reported `0 vulnerabilities`.
 
 ## Blockers ordered by release impact
 ### P0
-1. Akwam must prove discovery -> catalog -> metadata -> episodes where applicable -> non-empty safe HTTP(S) streams. Latest runner evidence timed out on `/one` and produced no runtime item. No waiver.
-2. FaselHD reaches identity/search/catalog/meta/episodes on `fasellhd.baby`, but stream extraction still returns `streams=0` for three sampled series candidates. The latest fix broadens the common extractor router to recognize bounded extensionless media/player URLs without weakening identity or safe-stream checks.
+1. Akwam must prove discovery -> catalog -> metadata -> episodes where applicable -> non-empty safe HTTP(S) streams. `akwam.ss/one` timed out before discovery on the latest hosted runner. A current public Akwam page was observed at `https://akwams.org/one`; it is added only as a quarantined candidate and is not promoted without identity/parser/runtime proof.
+2. FaselHD reaches identity/search/catalog/meta/episodes on `fasellhd.baby`, but stream extraction still returns `streams=0` for three sampled series candidates. The common extractor expansion remains unverified on the new head.
 3. ArabSeed remains home-reachable but category paths are Cloudflare challenged; do not bypass or classify as Working.
 4. Anime4Up, WitAnime, 3isk and EgyDead need independent identity and runtime evidence before promotion.
 5. WeCima is accepted only as degraded for the verified `403 + cf-mitigated=challenge` contract on `wecima.cx`.
@@ -31,18 +31,16 @@ UX/polish only after P0/P1.
 
 ## Work performed this cycle
 - Re-read repository metadata, PR #26, exact-head workflow `36020239004`, job `107702987928`, and the complete decoded job log.
-- Confirmed latest evidence: Yacine Working with `streams=1`; WeCima exact degraded contract; Akwam timed out before discovery; ArabSeed home reachable but category paths challenged; FaselHD reaches `search=65`, `catalog=64`, `meta=true`, and `episodes=87` on the sampled path, but `streams=0` for three candidates.
-- Implemented a common bounded extractor expansion in `src/extractors/index.ts`.
-- The extractor now recognizes direct media plus extensionless URLs carrying explicit media hints such as `manifest`, `playlist`, `stream`, `source`, `video`, `hls`, `dash`, or `file`, and scans keyed JSON/JS values in both original and unpacked payloads.
-- Media extraction remains HTTP(S)-only, deduplicated, referer-aware, bounded, and fail-closed. No Cloudflare/DRM/paywall/access-control bypass was added.
+- Confirmed latest evidence: Yacine Working with `streams=1`; WeCima exact degraded contract; Akwam timed out before discovery; ArabSeed home reachable but category paths challenged; FaselHD reaches `search=65`, `catalog=64`, `meta=true`, and `episodes=87` on the sampled path, but `streams=0` for three candidates; Anime4Up/WitAnime/3isk/EgyDead failed identity/runtime.
+- Added `https://akwams.org/one` to the Akwam DomainRegistry as a quarantined candidate only. The existing `akwam.ss/one` primary remains unchanged; candidate promotion still requires identity fingerprint, parser prerequisites and full safe-stream E2E.
 - No provider promotion, no waiver, no new PR, and no merge.
 
 ## CI / tests / artifacts
 - Latest completed exact-head run inspected: `36020239004`, merge ref `1e00e4f320f76bef6a44d99bb3c3403787432bc8`.
 - Static gates: install/lint/tests/build green; tests `26/26`; npm install reported `0 vulnerabilities`.
 - Runtime results: Yacine Working; WeCima exact degraded contract green; Akwam Broken; ArabSeed challenged; FaselHD Partial with `search=65`, `catalog=64`, `meta=true`, `episodes=87`, `streams=0`; Anime4Up/WitAnime/3isk/EgyDead Broken/unverified.
-- New code commit: `8c0dcd9a6c5a9077cdb594660b884b524d2d5210` (`src/extractors/index.ts`).
-- No exact-head CI result exists yet for `8c0dcd9a6c5a9077cdb594660b884b524d2d5210` at the end of this cycle.
+- New code commit this cycle: `c9519e2045fb9dab39b3b8c1b3b743b593c23125` (`src/domains/registry.ts`).
+- No exact-head CI result exists yet for `c9519e2045fb9dab39b3b8c1b3b743b593c23125` at the end of this cycle.
 - No release-ready artifact claimed; no release published.
 
 ## Provider/domain health from the latest runtime-bearing run
@@ -50,7 +48,7 @@ UX/polish only after P0/P1.
 - Partial: FaselHD (`streams=0` after successful meta/episodes).
 - Degraded: WeCima (verified Cloudflare challenge only).
 - Broken/unverified: Akwam, ArabSeed, Anime4Up, WitAnime, 3isk, EgyDead, SyriaLive.
-- Quarantined and excluded from the ten-provider denominator: Tuktuk candidate.
+- Quarantined and excluded from the ten-provider denominator: Tuktuk candidate; new Akwam `akwams.org` candidate until proven.
 
 ## Weighted verified completion
 | Category | Weight | Verified fraction | Earned |
@@ -68,16 +66,17 @@ UX/polish only after P0/P1.
 | Observability/performance/error isolation | 3 | 0.60 | 1.8 |
 | Release gate/artifact/runtime readiness | 7 | 0.40 | 2.8 |
 
-**A) Overall Verified Product Completion: 55.3%.** No new runtime stream credit was granted; the extractor change is unverified until exact-head CI completes.
+**A) Overall Verified Product Completion: 55.3%.** No new runtime stream credit was granted; the Akwam candidate is quarantined and the registry change is unverified until exact-head CI completes.
 **B) Runtime-Verified Provider Completion: 1/10 = 10.0%.** Working: Yacine TV. Partial: FaselHD. Degraded: WeCima. Broken/unverified: Akwam, ArabSeed, Anime4Up, WitAnime, 3isk, EgyDead, SyriaLive.
 **C) Release Gate Completion: 3/7 = 42.9%.** Fixed denominator seven.
 **D) Beta Readiness: 45.8%.** FaselHD still has no proven stream; no release artifact exists.
 
 ## Risks / what does not work
-- The extractor expansion has not yet passed exact-head lint/tests/build/runtime.
+- The Akwam candidate addition has not yet passed exact-head lint/tests/build/runtime.
+- `akwam.ss/one` still times out on the hosted runner; `akwams.org/one` is only a quarantined candidate and must not be treated as a fallback success without evidence.
 - FaselHD has no current Working evidence until at least one non-empty safe stream is proven after metadata/details succeed.
-- Akwam remains blocked before discovery on the hosted runner; WeCima remains unusable from hosted runtime due verified Cloudflare challenge; ArabSeed category paths are challenged; SyriaLive independence remains unproven.
+- WeCima remains unusable from hosted runtime due the verified Cloudflare challenge; ArabSeed category paths are challenged; SyriaLive independence remains unproven.
 - Security closure, Stremio runtime proof, licensing/dependency audit and release artifacts remain open.
 
 ## Next target
-Stay on PR #26. Validate exact head `8c0dcd9a6c5a9077cdb594660b884b524d2d5210`. If static gates remain green, inspect fresh FaselHD candidate diagnostics and require a non-empty safe stream. If streams remain empty, use the next log to identify the actual player contract or response shape rather than adding more unbounded selectors. Retain strict Akwam identity/stream requirements, do not bypass Cloudflare/DRM/paywalls, and do not merge until every strict require gate is green and the PR is mergeable.
+Stay on PR #26. Validate exact head `c9519e2045fb9dab39b3b8c1b3b743b593c23125`. Inspect whether the quarantined Akwam candidate produces a valid identity/parser contract and then a full non-empty safe stream path. If it fails, retain Akwam Broken/Partial with precise diagnostics and continue the highest-impact fix without weakening E2E or adding bypasses. Do not merge until every strict require gate is green and the PR is mergeable.
