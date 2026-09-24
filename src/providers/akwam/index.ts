@@ -31,6 +31,35 @@ export class AkwamProvider extends BaseProvider {
     return new URL(url, base).toString();
   }
 
+  private isChallenge(resp: Awaited<ReturnType<HttpClient['get']>): boolean {
+    const title = resp.$('title').first().text().trim().toLowerCase();
+    const body = resp.$('body').text().replace(/\s+/g, ' ').trim().toLowerCase();
+    return /just a moment|cloudflare|verify you are human|attention required/.test(`${title} ${body}`);
+  }
+
+  private hasIdentityFingerprint(resp: Awaited<ReturnType<HttpClient['get']>>): boolean {
+    if (this.isChallenge(resp)) return false;
+    const title = resp.$('title').first().text().trim().toLowerCase();
+    const html = resp.html().toLowerCase();
+    const body = resp.$('body').text().replace(/\s+/g, ' ').trim().toLowerCase();
+    return /akwam|أكوام/.test(`${title} ${html} ${body}`) && (
+      resp.$('a[href*="/movie/"], a[href*="/series/"], a[href*="/watch/"], a[href*="/episode/"], .entry-box, .film, .movie, article').length > 0
+      || /أفلام|مسلسلات|الحلقة|movie|series|episode/.test(body)
+    );
+  }
+
+  private async verifyIdentity(baseUrl: string): Promise<boolean> {
+    try {
+      const resp = await this.http.get(baseUrl, { timeout: 15000, retries: 1, retryDelayMs: 250 });
+      const verified = this.hasIdentityFingerprint(resp);
+      this.logger.debug(`Akwam identity probe ${baseUrl} verified=${verified}`);
+      return verified;
+    } catch (e) {
+      this.logger.debug(`Akwam identity probe failed ${baseUrl}: ${(e as Error).message}`);
+      return false;
+    }
+  }
+
   private parseListing(resp: Awaited<ReturnType<HttpClient['get']>>, baseUrl: string, forcedType?: StremioContentType): ProviderItem[] {
     const items: ProviderItem[] = [];
     const seen = new Set<string>();
@@ -43,6 +72,10 @@ export class AkwamProvider extends BaseProvider {
       '.post a[href]',
       '.movie a[href]',
       '.film a[href]',
+      '.film-poster a[href]',
+      '.post-item a[href]',
+      '.card a[href]',
+      '.item a[href]',
       'a[href*="/movie/"]',
       'a[href*="/series/"]',
       'a[href*="/watch/"]',
@@ -58,7 +91,7 @@ export class AkwamProvider extends BaseProvider {
       if (!href) return;
       const absolute = this.fixUrl(href, baseUrl);
       if (!absolute || seen.has(absolute) || absolute === this.siteBase(baseUrl) || absolute === `${this.siteBase(baseUrl)}/`) return;
-      const entry = resp.$(el).closest('.entry-box, article, .post, .movie, .film, li, .card, .item');
+      const entry = resp.$(el).closest('.entry-box, article, .post, .movie, .film, .film-poster, .post-item, li, .card, .item');
       const title = (
         entry.find('.entry-title, .title, h1, h2, h3, h4').first().text()
         || resp.$(el).attr('title')
@@ -74,6 +107,20 @@ export class AkwamProvider extends BaseProvider {
       seen.add(absolute);
       items.push({ id: this.formatId(absolute), provider: this.name, type, title, poster, year: yearMatch ? parseInt(yearMatch[1], 10) : undefined, url: absolute });
     });
+
+    if (items.length === 0 && this.hasIdentityFingerprint(resp)) {
+      resp.$('a[href]').each((idx, el) => {
+        const href = resp.$(el).attr('href');
+        if (!href) return;
+        const absolute = this.fixUrl(href, baseUrl);
+        const path = (() => { try { return new URL(absolute).pathname.toLowerCase(); } catch { return ''; } })();
+        if (!absolute || seen.has(absolute) || !/(?:\/movie\/|\/series\/|\/watch\/|\/episode[s]?\/)/i.test(path)) return;
+        const title = (resp.$(el).attr('title') || resp.$(el).attr('aria-label') || resp.$(el).text() || `Akwam ${idx + 1}`).replace(/\s+/g, ' ').trim();
+        if (title.length < 2) return;
+        seen.add(absolute);
+        items.push({ id: this.formatId(absolute), provider: this.name, type: forcedType || (/\/series\//i.test(path) ? 'series' : 'movie'), title, poster: '', url: absolute });
+      });
+    }
     return items;
   }
 
@@ -122,6 +169,7 @@ export class AkwamProvider extends BaseProvider {
   async searchInternal(query: string): Promise<ProviderItem[]> {
     return this.withHealthyDomain(async (baseUrl) => {
       const encoded = encodeURIComponent(query);
+      const identityVerified = await this.verifyIdentity(baseUrl);
       const items: ProviderItem[] = [];
       for (const section of ['movie', 'series'] as const) {
         const sectionItems = await this.fetchFirstListing(baseUrl, [
@@ -133,18 +181,19 @@ export class AkwamProvider extends BaseProvider {
         items.push(...sectionItems);
       }
       const unique = [...new Map(items.map((item) => [item.url || item.id, item])).values()];
-      return { value: unique, identityVerified: unique.length > 0 };
+      return { value: unique, identityVerified: identityVerified && unique.length > 0 };
     });
   }
 
   async getCatalogInternal(type: StremioContentType, page = 1): Promise<ProviderItem[]> {
     return this.withHealthyDomain(async (baseUrl) => {
+      const identityVerified = await this.verifyIdentity(baseUrl);
       const suffix = page > 1 ? `?page=${page}` : '';
       const paths = type === 'series'
         ? [`series${suffix}`, `series/${suffix}`, `tv${suffix}`]
         : [`movies${suffix}`, `movie${suffix}`, `films${suffix}`];
       const items = await this.fetchFirstListing(baseUrl, paths.map((path) => this.discoveryUrl(baseUrl, path)), type);
-      return { value: items, identityVerified: items.length > 0 };
+      return { value: items, identityVerified: identityVerified && items.length > 0 };
     });
   }
 
