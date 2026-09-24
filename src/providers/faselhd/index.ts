@@ -170,15 +170,30 @@ export class FaselhdProvider extends BaseProvider {
       };
 
       const mediaPattern = /https?:\/\/[^"'\s<>]+(?:\.m3u8|\.mp4|\.mkv)(?:\?[^"'\s<>]*)?/gi;
+      const collectMedia = (source: any, name: string, referrer: string) => {
+        const addCandidate = (value?: string, quality = 'Auto') => {
+          if (!value) return;
+          add(this.fixUrl(value, referrer), name, quality, { Referer: referrer });
+        };
+        source.$('source[src],video[src],video[data-src],*[data-file],*[data-video],*[data-src]').each((_: number, node: any) => {
+          const el = source.$(node);
+          addCandidate(el.attr('src') || el.attr('data-src') || el.attr('data-file') || el.attr('data-video'), el.attr('label') || el.attr('data-quality') || 'Auto');
+        });
+        const html = source.text || '';
+        for (const match of html.matchAll(mediaPattern)) addCandidate(match[0]);
+      };
+
       const scripts = response.$('script').map((_: number, script: any) => response.$(script).text()).get().join('\n');
-      for (const match of scripts.matchAll(mediaPattern)) add(match[0], 'FaselHD Script');
-      for (const match of response.text.matchAll(mediaPattern)) add(match[0], 'FaselHD HTML');
+      for (const match of scripts.matchAll(mediaPattern)) add(match[0], 'FaselHD Script', 'Auto', { Referer: response.url || fullUrl });
+      for (const match of response.text.matchAll(mediaPattern)) add(match[0], 'FaselHD HTML', 'Auto', { Referer: response.url || fullUrl });
+      collectMedia(response, 'FaselHD Source', response.url || fullUrl);
 
       const iframe = response.$('iframe').first().attr('data-src') || response.$('iframe').first().attr('src');
       if (iframe) {
         try {
           const playerUrl = this.fixUrl(iframe, origin);
           const playerResponse = await this.http.get(playerUrl, { headers: { Referer: response.url || fullUrl, 'User-Agent': MOBILE_USER_AGENT } });
+          collectMedia(playerResponse, 'FaselHD Iframe', playerUrl);
           const playerScripts = playerResponse.$('script').map((_: number, script: any) => playerResponse.$(script).text()).get().join('\n');
           for (const match of playerScripts.matchAll(mediaPattern)) add(match[0], 'FaselHD Iframe', 'Auto', { Referer: playerUrl });
 
