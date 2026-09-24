@@ -71,16 +71,34 @@ export class AkwamProvider extends BaseProvider {
   }
 
   private async fetchFirstListing(baseUrl: string, urls: string[], forcedType?: StremioContentType): Promise<ProviderItem[]> {
-    for (const url of urls.slice(0, 4)) {
-      try {
-        const resp = await this.http.get(url, { timeout: 30000, retries: 1, retryDelayMs: 500 });
-        const items = this.parseListing(resp, baseUrl, forcedType);
-        if (items.length > 0) return items;
-      } catch (e) {
-        this.logger.debug(`Akwam listing candidate failed: ${url} ${(e as Error).message}`);
+    const candidates = urls.slice(0, 8);
+    const queue = [...candidates];
+    const results: ProviderItem[] = [];
+    const seen = new Set<string>();
+    const worker = async () => {
+      while (queue.length > 0 && results.length === 0) {
+        const url = queue.shift();
+        if (!url) return;
+        try {
+          const resp = await this.http.get(url, { timeout: 30000, retries: 1, retryDelayMs: 500 });
+          const items = this.parseListing(resp, baseUrl, forcedType);
+          if (items.length > 0) {
+            for (const item of items) {
+              const key = item.url || item.id;
+              if (!seen.has(key)) {
+                seen.add(key);
+                results.push(item);
+              }
+            }
+            return;
+          }
+        } catch (e) {
+          this.logger.debug(`Akwam listing candidate failed: ${url} ${(e as Error).message}`);
+        }
       }
-    }
-    return [];
+    };
+    await Promise.all(Array.from({ length: Math.min(4, candidates.length) }, () => worker()));
+    return results;
   }
 
   private async withContentDomain<T>(contentId: string, attempt: (baseUrl: string, fullUrl: string) => Promise<T>): Promise<T> {
