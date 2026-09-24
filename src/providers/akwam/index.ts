@@ -33,23 +33,54 @@ export class AkwamProvider extends BaseProvider {
   private parseListing(resp: Awaited<ReturnType<HttpClient['get']>>, baseUrl: string, forcedType?: StremioContentType): ProviderItem[] {
     const items: ProviderItem[] = [];
     const seen = new Set<string>();
-    const anchors = resp.$('.widget-body .entry-box a.box, .widget-body .entry-box a[href], .entry-box a.box, .entry-box a[href]');
+    const anchors = resp.$([
+      '.widget-body .entry-box a.box',
+      '.widget-body .entry-box a[href]',
+      '.entry-box a.box',
+      '.entry-box a[href]',
+      'article a[href]',
+      '.post a[href]',
+      '.movie a[href]',
+      '.film a[href]',
+      'a[href*="/movie/"]',
+      'a[href*="/series/"]',
+      'a[href*="/watch/"]',
+      'a[href*="/episode/"]',
+      'a[href*="/episodes/"]',
+    ].join(', '));
     anchors.each((_, el) => {
       const href = resp.$(el).attr('href');
       if (!href) return;
       const absolute = this.fixUrl(href, baseUrl);
       if (seen.has(absolute)) return;
-      const entry = resp.$(el).closest('.entry-box');
-      const title = (entry.find('.entry-title').first().text() || resp.$(el).attr('title') || resp.$(el).text()).trim();
-      if (!title || absolute === this.siteBase(baseUrl) || absolute.endsWith('/')) return;
+      const entry = resp.$(el).closest('.entry-box, article, .post, .movie, .film');
+      const title = (
+        entry.find('.entry-title, .title, h2, h3').first().text()
+        || resp.$(el).attr('title')
+        || resp.$(el).text()
+      ).trim();
+      if (!title || absolute === this.siteBase(baseUrl)) return;
       const image = entry.find('img').first();
-      const poster = this.fixUrl(image.attr('data-src') || image.attr('src'), baseUrl);
-      const type: StremioContentType = forcedType || (/\/series(?:\/|$)/i.test(absolute) ? 'series' : 'movie');
+      const poster = this.fixUrl(image.attr('data-src') || image.attr('data-lazy-src') || image.attr('src'), baseUrl);
+      const type: StremioContentType = forcedType || (/\/(?:series|episode|episodes)\b/i.test(absolute) ? 'series' : 'movie');
       const yearMatch = entry.text().match(/\b(19\d\d|20\d\d)\b/);
       seen.add(absolute);
       items.push({ id: this.formatId(absolute), provider: this.name, type, title, poster, year: yearMatch ? parseInt(yearMatch[1], 10) : undefined, url: absolute });
     });
     return items;
+  }
+
+  private async fetchFirstListing(baseUrl: string, urls: string[], forcedType?: StremioContentType): Promise<ProviderItem[]> {
+    for (const url of urls.slice(0, 4)) {
+      try {
+        const resp = await this.http.get(url, { timeout: 30000, retries: 1, retryDelayMs: 500 });
+        const items = this.parseListing(resp, baseUrl, forcedType);
+        if (items.length > 0) return items;
+      } catch (e) {
+        this.logger.debug(`Akwam listing candidate failed: ${url} ${(e as Error).message}`);
+      }
+    }
+    return [];
   }
 
   private async withContentDomain<T>(contentId: string, attempt: (baseUrl: string, fullUrl: string) => Promise<T>): Promise<T> {
@@ -65,23 +96,33 @@ export class AkwamProvider extends BaseProvider {
 
   async searchInternal(query: string): Promise<ProviderItem[]> {
     return this.withHealthyDomain(async (baseUrl) => {
+      const encoded = encodeURIComponent(query);
       const items: ProviderItem[] = [];
       for (const section of ['movie', 'series'] as const) {
-        const resp = await this.http.get(this.discoveryUrl(baseUrl, `search?q=${encodeURIComponent(query)}&section=${section}`), { timeout: 30000, retries: 2, retryDelayMs: 500 });
-        items.push(...this.parseListing(resp, baseUrl, section));
+        const sectionItems = await this.fetchFirstListing(baseUrl, [
+          this.discoveryUrl(baseUrl, `search?q=${encoded}&section=${section}`),
+          this.discoveryUrl(baseUrl, `search?query=${encoded}&section=${section}`),
+          this.discoveryUrl(baseUrl, `search?keyword=${encoded}&section=${section}`),
+          this.discoveryUrl(baseUrl, `search/${encoded}?section=${section}`),
+        ], section);
+        items.push(...sectionItems);
       }
       const unique = [...new Map(items.map((item) => [item.url || item.id, item])).values()];
       return { value: unique, identityVerified: unique.length > 0 };
     });
   }
+
   async getCatalogInternal(type: StremioContentType, page = 1): Promise<ProviderItem[]> {
     return this.withHealthyDomain(async (baseUrl) => {
-      const path = type === 'series' ? 'series' : 'movies';
-      const resp = await this.http.get(this.discoveryUrl(baseUrl, `${path}${page > 1 ? `?page=${page}` : ''}`), { timeout: 30000, retries: 2, retryDelayMs: 500 });
-      const items = this.parseListing(resp, baseUrl, type);
+      const suffix = page > 1 ? `?page=${page}` : '';
+      const paths = type === 'series'
+        ? [`series${suffix}`, `series/${suffix}`, `tv${suffix}`]
+        : [`movies${suffix}`, `movie${suffix}`, `films${suffix}`];
+      const items = await this.fetchFirstListing(baseUrl, paths.map((path) => this.discoveryUrl(baseUrl, path)), type);
       return { value: items, identityVerified: items.length > 0 };
     });
   }
+
   async getMetaInternal(contentId: string, type: StremioContentType): Promise<ProviderDetail | null> {
     return this.withContentDomain(contentId, async (baseUrl, fullUrl) => {
       const resp = await this.http.get(fullUrl);
@@ -107,13 +148,14 @@ export class AkwamProvider extends BaseProvider {
       return { id: this.formatId(fullUrl), provider: this.name, type, title, poster, description, url: fullUrl, episodes: episodes.length ? episodes : undefined };
     });
   }
+
   async getStreamsInternal(contentId: string, _type: StremioContentType, episodeId?: string): Promise<ResolvedStream[]> {
     const target = episodeId || contentId;
     return this.withContentDomain(target, async (baseUrl, fullUrl) => {
       const resp = await this.http.get(fullUrl, { referer: fullUrl, timeout: 30000, retries: 1, retryDelayMs: 250 });
       const streams: ResolvedStream[] = [];
       const directLinks = new Set<string>();
-      resp.$('a[href*="/link/"], a[href*="/watch/"], a[href*="/download/"], a[href*="/play/"], a[href*="/quality/"]').each((_, el) => {
+      resp.$('a[href*="/link/"], a[href*="/watch/"], a[href*="/download/"], a[href*="/play/"], a[href*="/quality/"], a[href*="/stream/"]').each((_, el) => {
         const link = resp.$(el).attr('href');
         if (link) directLinks.add(this.fixUrl(link, baseUrl));
       });
