@@ -41,7 +41,7 @@ export class AkwamProvider extends BaseProvider {
   private hasIdentityFingerprint(resp: Awaited<ReturnType<HttpClient['get']>>): boolean {
     if (this.isChallenge(resp)) return false;
     const title = resp.$('title').first().text().trim().toLowerCase();
-    const html = resp.text().toLowerCase();
+    const html = resp.text.toLowerCase();
     const body = resp.$('body').text().replace(/\s+/g, ' ').trim().toLowerCase();
     return /akwam|أكوام/.test(`${title} ${html} ${body}`) && (
       resp.$('a[href*="/movie/"], a[href*="/movies/"], a[href*="/series/"], a[href*="/watch/"], a[href*="/episode/"], a[href*="/episodes/"], .entry-box, .film, .movie, article').length > 0
@@ -54,10 +54,8 @@ export class AkwamProvider extends BaseProvider {
     try { normalized = decodeURIComponent(normalized); } catch { /* keep raw path */ }
     if (/^\/category(?:\/|$)/i.test(normalized)) return false;
     if (/^\/(?:movies?|series|films?|tv)\/?$/i.test(normalized)) return false;
-    // Pagination/index pages are navigation, not playable content.
     if (/^\/(?:movies?|films?|series|tv)\/page\/\d+\/?$/i.test(normalized)) return false;
     if (/^\/(?:movies?|films?|series|tv)\/(?:page|category)\//i.test(normalized)) return false;
-    // Reject obvious listing slugs that have no content identifier segment.
     if (/^\/(?:movies?|films?|series|tv)\/(?:page|category|search|latest|new|all)(?:\/|$)/i.test(normalized)) return false;
     return /(?:\/movie(?:s)?\/|\/series\/|\/watch(?:\.php|\/)|\/episode(?:s)?\/)/i.test(normalized);
   }
