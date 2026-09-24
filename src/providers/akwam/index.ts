@@ -27,10 +27,6 @@ export class AkwamProvider extends BaseProvider {
     if (!url) return '';
     if (url.startsWith('//')) return `https:${url}`;
     if (/^https?:\/\//i.test(url)) return url;
-    // Akwam serves relative links from the mounted /one route. Resolving
-    // against the origin silently drops that route and turns valid content
-    // links into false identity/parser failures. Preserve the active site base
-    // for route-relative paths while still honoring explicit root-relative URLs.
     const base = /^\//.test(url) ? `${this.siteOrigin(baseUrl)}/` : `${this.siteBase(baseUrl)}/`;
     return new URL(url, base).toString();
   }
@@ -38,7 +34,7 @@ export class AkwamProvider extends BaseProvider {
   private parseListing(resp: Awaited<ReturnType<HttpClient['get']>>, baseUrl: string, forcedType?: StremioContentType): ProviderItem[] {
     const items: ProviderItem[] = [];
     const seen = new Set<string>();
-    const anchors = resp.$([
+    const selector = [
       '.widget-body .entry-box a.box',
       '.widget-body .entry-box a[href]',
       '.entry-box a.box',
@@ -52,19 +48,25 @@ export class AkwamProvider extends BaseProvider {
       'a[href*="/watch/"]',
       'a[href*="/episode/"]',
       'a[href*="/episodes/"]',
-    ].join(', '));
-    anchors.each((_, el) => {
+      'a[href*="movie"]',
+      'a[href*="series"]',
+      'a[href*="watch"]',
+      'a[href*="episode"]',
+    ].join(', ');
+    resp.$(selector).each((idx, el) => {
       const href = resp.$(el).attr('href');
       if (!href) return;
       const absolute = this.fixUrl(href, baseUrl);
-      if (seen.has(absolute)) return;
-      const entry = resp.$(el).closest('.entry-box, article, .post, .movie, .film');
+      if (!absolute || seen.has(absolute) || absolute === this.siteBase(baseUrl) || absolute === `${this.siteBase(baseUrl)}/`) return;
+      const entry = resp.$(el).closest('.entry-box, article, .post, .movie, .film, li, .card, .item');
       const title = (
-        entry.find('.entry-title, .title, h2, h3').first().text()
+        entry.find('.entry-title, .title, h1, h2, h3, h4').first().text()
         || resp.$(el).attr('title')
+        || resp.$(el).attr('aria-label')
         || resp.$(el).text()
-      ).trim();
-      if (!title || absolute === this.siteBase(baseUrl)) return;
+        || `Akwam ${idx + 1}`
+      ).replace(/\s+/g, ' ').trim();
+      if (!title || title.length < 2) return;
       const image = entry.find('img').first();
       const poster = this.fixUrl(image.attr('data-src') || image.attr('data-lazy-src') || image.attr('src'), baseUrl);
       const type: StremioContentType = forcedType || (/\/(?:series|episode|episodes)\b/i.test(absolute) ? 'series' : 'movie');
@@ -86,9 +88,9 @@ export class AkwamProvider extends BaseProvider {
         if (!url) return;
         try {
           const resp = await this.http.get(url, { timeout: 30000, retries: 1, retryDelayMs: 500 });
-          const items = this.parseListing(resp, baseUrl, forcedType);
-          if (items.length > 0) {
-            for (const item of items) {
+          const parsed = this.parseListing(resp, baseUrl, forcedType);
+          if (parsed.length > 0) {
+            for (const item of parsed) {
               const key = item.url || item.id;
               if (!seen.has(key)) {
                 seen.add(key);
