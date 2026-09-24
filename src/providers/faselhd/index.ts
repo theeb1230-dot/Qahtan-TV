@@ -21,7 +21,13 @@ export class FaselhdProvider extends BaseProvider {
   private fixUrl(url?: string, baseUrl = this.mainUrl): string {
     if (!url) return '';
     try {
-      return new URL(url, baseUrl).toString();
+      const cleaned = url
+        .replace(/&amp;/gi, '&')
+        .replace(/\\\\/g, '\\')
+        .replace(/\\u0026/gi, '&')
+        .replace(/\\u003d/gi, '=')
+        .replace(/^['\"]|['\"]$/g, '');
+      return new URL(cleaned, baseUrl).toString();
     } catch {
       return '';
     }
@@ -43,10 +49,6 @@ export class FaselhdProvider extends BaseProvider {
 
   private parserContractVerified($: any): boolean {
     return $('a[href*="/video/"],a[href*="/watch/"],a[href*="/series/"],a[href*="/movie/"],a[href*="/post/"],a[href*="watch.php?"],iframe,script').length > 0;
-  }
-
-  private identityVerified($: any): boolean {
-    return this.brandVerified($) && this.parserContractVerified($);
   }
 
   private detailIdentityVerified(response: any, origin: string): boolean {
@@ -180,37 +182,59 @@ export class FaselhdProvider extends BaseProvider {
         streams.push({ name, quality, url, isM3u8: /\.m3u8(?:$|\?)/i.test(url), headers });
       };
 
-      const mediaPattern = /https?:\/\/[^"'\s<>]+(?:\.m3u8|\.mp4|\.mkv)(?:\?[^"'\s<>]*)?/gi;
+      const mediaPattern = /(?:https?:)?\\?\/\\?\/[^"'\\s<>]+(?:\\.m3u8|\\.mp4|\\.mkv)(?:\\?[^"'\\s<>]*)?/gi;
+      const urlPattern = /(?:https?:)?\\?\/\\?\/[^"'\\s<>\\)]{8,}/gi;
+      const normalizeExtracted = (value: string, referrer: string) => {
+        const decoded = value
+          .replace(/\\\\\//g, '/')
+          .replace(/\\u0026/gi, '&')
+          .replace(/\\u003d/gi, '=')
+          .replace(/&amp;/gi, '&')
+          .replace(/[),;]+$/, '');
+        return this.fixUrl(decoded, referrer);
+      };
+
       const collectMedia = (source: any, name: string, referrer: string) => {
         const addCandidate = (value?: string, quality = 'Auto') => {
           if (!value) return;
-          const resolved = this.fixUrl(value, referrer);
-          if (resolved) add(resolved, name, quality, { Referer: referrer });
+          const resolved = normalizeExtracted(value, referrer);
+          if (resolved && /\.(?:m3u8|mp4|mkv)(?:$|\?)/i.test(resolved)) add(resolved, name, quality, { Referer: referrer });
         };
-        source.$('source[src],video[src],video[data-src],*[data-file],*[data-video],*[data-src]').each((_: number, node: any) => {
+        source.$('source[src],video[src],video[data-src],*[data-file],*[data-video],*[data-src],*[data-url],*[data-server],*[data-player]').each((_: number, node: any) => {
           const el = source.$(node);
-          addCandidate(el.attr('src') || el.attr('data-src') || el.attr('data-file') || el.attr('data-video'), el.attr('label') || el.attr('data-quality') || 'Auto');
+          addCandidate(
+            el.attr('src') || el.attr('data-src') || el.attr('data-file') || el.attr('data-video') || el.attr('data-url') || el.attr('data-server') || el.attr('data-player'),
+            el.attr('label') || el.attr('data-quality') || 'Auto',
+          );
         });
-        const html = source.text || '';
-        for (const match of html.matchAll(mediaPattern)) addCandidate(match[0]);
+        const text = `${source.text || ''}\n${source.$('script').map((_: number, script: any) => source.$(script).text()).get().join('\n')}`;
+        for (const match of text.matchAll(mediaPattern)) addCandidate(match[0]);
       };
 
       const collectIframesAndLinks = (source: any, pageUrl: string) => {
         const urls: string[] = [];
-        source.$('iframe[src],iframe[data-src],a[href],button[data-href],button[onclick],.serversList a,.buttonsList button').each((_: number, element: any) => {
-          const raw = source.$(element).attr('href') || source.$(element).attr('data-href') || source.$(element).attr('data-src') || source.$(element).attr('src') || source.$(element).attr('onclick')?.match(/https?:\/\/[^'\"]+/)?.[0];
-          const resolved = this.fixUrl(raw, pageUrl);
+        const push = (raw?: string) => {
+          if (!raw) return;
+          const resolved = normalizeExtracted(raw, pageUrl);
           if (resolved && !urls.includes(resolved)) urls.push(resolved);
+        };
+        source.$('iframe[src],iframe[data-src],a[href],button[data-href],button[onclick],.serversList a,.buttonsList button,[data-server],[data-url],[data-link],[data-iframe],[data-player],[onclick*="http"],.server,.server-item,li.server').each((_: number, element: any) => {
+          const el = source.$(element);
+          push(el.attr('href') || el.attr('data-href') || el.attr('data-src') || el.attr('src') || el.attr('data-server') || el.attr('data-url') || el.attr('data-link') || el.attr('data-iframe') || el.attr('data-player'));
+          const onclick = el.attr('onclick') || '';
+          for (const match of onclick.matchAll(/(?:https?:)?\\?\/\\?\/[^'\"\s)]+/gi)) push(match[0]);
         });
+        const text = `${source.text || ''}\n${source.$('script').map((_: number, script: any) => source.$(script).text()).get().join('\n')}`;
+        for (const match of text.matchAll(urlPattern)) {
+          const candidate = normalizeExtracted(match[0], pageUrl);
+          if (candidate && !/\.(?:js|css|png|jpg|jpeg|gif|svg|woff2?)(?:$|\?)/i.test(candidate) && !urls.includes(candidate)) urls.push(candidate);
+        }
         return urls;
       };
 
-      const scripts = response.$('script').map((_: number, script: any) => response.$(script).text()).get().join('\n');
-      for (const match of scripts.matchAll(mediaPattern)) add(match[0], 'FaselHD Script', 'Auto', { Referer: response.url || fullUrl });
-      for (const match of response.text.matchAll(mediaPattern)) add(match[0], 'FaselHD HTML', 'Auto', { Referer: response.url || fullUrl });
       collectMedia(response, 'FaselHD Source', response.url || fullUrl);
 
-      const candidatePages = collectIframesAndLinks(response, response.url || fullUrl).slice(0, 10);
+      const candidatePages = collectIframesAndLinks(response, response.url || fullUrl).slice(0, 12);
       for (const candidateUrl of candidatePages) {
         if (/\.(?:m3u8|mp4|mkv)(?:$|\?)/i.test(candidateUrl)) {
           add(candidateUrl, 'FaselHD Direct', 'Auto', { Referer: response.url || fullUrl });
@@ -219,8 +243,6 @@ export class FaselhdProvider extends BaseProvider {
         try {
           const playerResponse = await this.http.get(candidateUrl, { headers: { Referer: response.url || fullUrl, 'User-Agent': MOBILE_USER_AGENT }, timeout: 7000 });
           collectMedia(playerResponse, 'FaselHD Player', candidateUrl);
-          const playerScripts = playerResponse.$('script').map((_: number, script: any) => playerResponse.$(script).text()).get().join('\n');
-          for (const match of playerScripts.matchAll(mediaPattern)) add(match[0], 'FaselHD Player', 'Auto', { Referer: candidateUrl });
 
           const context: any = {
             window: {},
@@ -238,7 +260,7 @@ export class FaselhdProvider extends BaseProvider {
           };
           vm.createContext(context);
           for (const script of playerResponse.$('script').map((_: number, node: any) => playerResponse.$(node).text()).get()) {
-            if (!/jwplayer|sources|eval/i.test(script)) continue;
+            if (!/jwplayer|sources|file|m3u8|mp4|eval/i.test(script)) continue;
             try {
               vm.runInContext(script, context, { timeout: 2000 });
             } catch {
@@ -246,9 +268,13 @@ export class FaselhdProvider extends BaseProvider {
             }
           }
 
-          const nested = collectIframesAndLinks(playerResponse, candidateUrl).filter((nestedUrl) => nestedUrl !== candidateUrl).slice(0, 4);
+          const nested = collectIframesAndLinks(playerResponse, candidateUrl).filter((nestedUrl) => nestedUrl !== candidateUrl).slice(0, 6);
           for (const nestedUrl of nested) {
             try {
+              if (/\.(?:m3u8|mp4|mkv)(?:$|\?)/i.test(nestedUrl)) {
+                add(nestedUrl, 'FaselHD Nested', 'Auto', { Referer: candidateUrl });
+                continue;
+              }
               const extracted = await extractStreams(nestedUrl, candidateUrl);
               for (const stream of extracted) add(stream.url, stream.name, stream.quality, { ...(stream.headers || {}), Referer: candidateUrl });
             } catch {
