@@ -3,8 +3,8 @@
 ## Current cycle
 - Start/main SHA: `003f167613133054c4e08e257830822c012e0560`; default branch `main`.
 - Single active PR: #26 `qahtan/p0-runtime-faselhd-evidence`; all work remains on this branch only.
-- Current PR head at verification: `c7e416a68320859f8e492b17bd4202212bee78ed`.
-- Exact-head workflow: run `35933601873`, merge ref `762224445ce688617e99ade6b81bdd6a3fecdac7`, completed `failure`.
+- Current PR head after this cycle: `e63c37261e87591cb2536cf293ccb990b1adf1e2`.
+- Prior exact-head workflow: run `35938878569`, merge ref `a2690236c8d44058717f117c1f62bfe852781bd7`, completed `failure`.
 - Static gates were green: install, lint, 26/26 tests, build.
 - Fresh runtime evidence: Yacine passed with 3 safe streams; WeCima passed the exact Cloudflare degraded contract; Akwam failed identity verification on `https://akwam.ss/one`; ArabSeed home was reachable but category paths were challenged; FaselHD reached identity/catalog/meta/episodes but remained `streams=0`; Anime4Up, WitAnime, 3isk and EgyDead failed identity/runtime prerequisites.
 
@@ -30,15 +30,18 @@ UX/polish only after P0/P1.
 - No provider promotion or CI waiver introduced.
 
 ## Work performed this cycle
-- Re-read repository metadata, PR #26, exact-head workflow `35933601873`, job `107425548951`, and the complete job log.
+- Re-read repository metadata, PR #26, exact-head workflow `35938878569`, job `107442094249`, and the complete job log.
 - Confirmed install/lint/tests/build remain green; 26/26 tests passed.
 - Confirmed current independent runtime outcomes: Yacine Working with 3 safe streams; WeCima correctly degraded by verified `403 + cf-mitigated=challenge`; Akwam Broken due identity verification failure on `/one`; ArabSeed home reachable but category paths challenged; FaselHD Partial with 61 search/catalog items, 142 episodes and zero streams; Anime4Up, WitAnime, 3isk and EgyDead Broken/unverified.
-- Confirmed the strict require steps remain active: Akwam, ArabSeed, FaselHD, Anime4Up, WitAnime, 3isk and EgyDead fail; Yacine and WeCima pass.
-- The failed-job rerun for the previous cycle completed with the same provider classification; no new runtime credit was earned.
-- No runtime waiver, no stream=0 waiver, no provider reclassification, and no new PR.
+- Diagnosed the highest actionable blocker as an Akwam discovery/parser contract mismatch, not a static TypeScript failure.
+- Implemented bounded, fail-closed Akwam discovery fallbacks: broader listing selectors and bounded alternate search/catalog URL candidates while preserving identityVerified=true only when parsed content is non-empty.
+- Kept all runtime acceptance strict: no Cloudflare bypass, no streams=0 waiver, HTTP(S)-only streams, bounded candidate probing.
+- No provider reclassification and no new PR.
 
 ## CI / tests / artifacts
-- Exact-head run `35933601873`, merge ref `762224445ce688617e99ade6b81bdd6a3fecdac7`: install green; lint green; 26/26 tests green; build green; Yacine and WeCima runtime gates passed; Akwam, ArabSeed, FaselHD, Anime4Up, WitAnime, 3isk and EgyDead strict require gates failed.
+- Prior exact-head run `35938878569`, merge ref `a2690236c8d44058717f117c1f62bfe852781bd7`: install green; lint green; 26/26 tests green; build green; Yacine and WeCima runtime gates passed; Akwam, ArabSeed, FaselHD, Anime4Up, WitAnime, 3isk and EgyDead strict require gates failed.
+- New code commit: `e63c37261e87591cb2536cf293ccb990b1adf1e2`.
+- No exact-head workflow has yet been observed for `e63c37261e87591cb2536cf293ccb990b1adf1e2` at the end of this cycle.
 - No release-ready artifact claimed.
 
 ## Provider/domain health
@@ -70,10 +73,10 @@ UX/polish only after P0/P1.
 **D) Beta Readiness: 49.0%.** No increase because there is still no release artifact and only one fully Working provider on fresh evidence.
 
 ## Risks / what does not work
-- Akwam still fails before discovery because identity/parser verification does not produce a promotable domain on the configured `/one` route.
+- Akwam still fails before discovery on the prior exact-head run; the new fallback code is not yet runtime-verified.
 - FaselHD stream output remains unproven after extractor/redirect work; current fresh run still reports `streams=0`.
 - WeCima remains unusable from hosted runtime due verified Cloudflare challenge; ArabSeed category paths are challenged; SyriaLive independence remains unproven.
 - Security closure, Stremio runtime proof, licensing/dependency audit and release artifacts remain open.
 
 ## Next target
-Stay on PR #26. Next safe action is to diagnose Akwam identity/parser contract from the exact runtime response before changing code; do not weaken acceptance or waive streams. If Akwam passes, immediately re-check Yacine and then continue with FaselHD stream extraction. Merge only after every strict require gate is green and the PR is mergeable.
+Stay on PR #26. Read the exact-head CI for `e63c37261e87591cb2536cf293ccb990b1adf1e2`. If Akwam passes, immediately re-check Yacine and then continue with FaselHD stream extraction. If Akwam still fails, use the new logs to distinguish parser contract drift from external reachability before making another code change. Merge only after every strict require gate is green and the PR is mergeable.
