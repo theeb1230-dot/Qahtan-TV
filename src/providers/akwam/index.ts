@@ -40,7 +40,7 @@ export class AkwamProvider extends BaseProvider {
   private hasIdentityFingerprint(resp: Awaited<ReturnType<HttpClient['get']>>): boolean {
     if (this.isChallenge(resp)) return false;
     const title = resp.$('title').first().text().trim().toLowerCase();
-    const html = resp.html().toLowerCase();
+    const html = resp.text.toLowerCase();
     const body = resp.$('body').text().replace(/\s+/g, ' ').trim().toLowerCase();
     return /akwam|أكوام/.test(`${title} ${html} ${body}`) && (
       resp.$('a[href*="/movie/"], a[href*="/series/"], a[href*="/watch/"], a[href*="/episode/"], .entry-box, .film, .movie, article').length > 0
