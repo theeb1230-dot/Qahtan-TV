@@ -27,7 +27,12 @@ export class AkwamProvider extends BaseProvider {
     if (!url) return '';
     if (url.startsWith('//')) return `https:${url}`;
     if (/^https?:\/\//i.test(url)) return url;
-    return new URL(url, `${this.siteOrigin(baseUrl)}/`).toString();
+    // Akwam serves relative links from the mounted /one route. Resolving
+    // against the origin silently drops that route and turns valid content
+    // links into false identity/parser failures. Preserve the active site base
+    // for route-relative paths while still honoring explicit root-relative URLs.
+    const base = /^\//.test(url) ? `${this.siteOrigin(baseUrl)}/` : `${this.siteBase(baseUrl)}/`;
+    return new URL(url, base).toString();
   }
 
   private parseListing(resp: Awaited<ReturnType<HttpClient['get']>>, baseUrl: string, forcedType?: StremioContentType): ProviderItem[] {
