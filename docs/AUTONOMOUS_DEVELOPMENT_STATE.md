@@ -3,16 +3,16 @@
 ## Current cycle
 - Start/main SHA: `003f167613133054c4e08e257830822c012e0560`; default branch `main`.
 - Single active PR: #26 `qahtan/p0-runtime-faselhd-evidence`; all work remains on this branch only.
-- Exact PR head at start: `e78c08737ccdff537725854bcac19226239b94ab`.
-- Exact-head workflow: run `35955742917`, merge ref `808e596289a354f9be478316220a7b41a39be271`, completed `failure`.
-- PR remains open and currently `mergeable=true`; no merge performed.
-- Static gates were green: install, lint, 26/26 tests, build; npm audit reported 0 vulnerabilities.
-- Fresh runtime evidence from the complete job log: Yacine passed with 1 safe stream; WeCima passed the exact Cloudflare degraded contract; Akwam failed identity verification on `https://akwam.ss/one`; ArabSeed home was reachable but category paths were challenged; FaselHD failed current runtime before discovery because all configured domains failed identity verification; Anime4Up, WitAnime, 3isk and EgyDead failed identity/runtime prerequisites.
+- Exact PR head at start: `ccdbfc11f05bf1c40f57c40394cda68d6bcdbd54`.
+- Latest completed exact-head workflow inspected before this change: run `35955742917`, job `107493574880`, completed `failure`.
+- PR remains open and currently mergeable; no merge performed.
+- Static gates were green on the inspected run: install, lint, 26/26 tests, build; npm audit reported 0 vulnerabilities.
+- Fresh runtime evidence from that run: Yacine passed with 1 safe stream; WeCima passed the exact Cloudflare degraded contract; Akwam failed identity verification on `https://akwam.ss/one`; ArabSeed home was reachable but category paths were challenged; FaselHD failed current runtime before discovery because all configured domains failed identity verification; Anime4Up, WitAnime, 3isk and EgyDead failed identity/runtime prerequisites.
 
 ## Blockers ordered by release impact
 ### P0
-1. Akwam discovery must prove search -> catalog -> metadata -> episodes where applicable -> non-empty safe HTTP(S) streams on the configured `/one` route; no streams=0 waiver. The latest exact-head log still reports `identity verification failed` before discovery. The code change in this cycle only improves bounded concurrent discovery fallback; it does not claim acceptance closure.
-2. FaselHD must restore a verified domain/parser contract first, then prove discovery/catalog -> metadata/details -> episodes when applicable -> non-empty safe HTTP(S) streams. Latest exact-head run failed all configured domains at identity verification, so no current Working proof exists.
+1. Akwam discovery must prove search -> catalog -> metadata -> episodes where applicable -> non-empty safe HTTP(S) streams on the configured `/one` route; no streams=0 waiver. The active code now preserves the mounted `/one` route when resolving relative links, addressing a concrete URL-resolution failure mode. Acceptance remains open until exact-head runtime proves the complete path.
+2. FaselHD must restore a verified domain/parser contract first, then prove discovery/catalog -> metadata/details -> episodes when applicable -> non-empty safe HTTP(S) streams. Latest exact-head evidence failed all configured domains at identity verification, so no current Working proof exists.
 3. ArabSeed remains home-reachable but category paths are challenged; do not bypass or classify as Working.
 4. Anime4Up, WitAnime, 3isk and EgyDead need independent identity and runtime evidence before promotion.
 5. WeCima remains degraded only for verified `403 + cf-mitigated=challenge` on `wecima.cx`.
@@ -34,14 +34,15 @@ UX/polish only after P0/P1.
 - Re-read repository metadata, PR #26, exact-head workflow `35955742917`, job `107493574880`, and the complete decoded job log.
 - Confirmed install/lint/tests/build remain green; 26/26 tests passed; npm audit reported 0 vulnerabilities.
 - Confirmed the complete independent runtime outcomes: Yacine Working with 1 safe stream; WeCima degraded correctly with `status=403`, `finalHost=wecima.cx`, `cfMitigated=challenge`, `title=Just a moment...`; Akwam Broken with `identity verification failed` on `/one`; ArabSeed home reachable with brand/category fingerprints but `/films` and `/tv` challenged; FaselHD Broken on this run because `www.fasel-hd.co`, `www.fasel-hd.com`, `fasellhd.baby`, and `fasellhd.rest/main` all failed identity verification; Anime4Up, WitAnime, 3isk and EgyDead Broken/unverified.
-- Implemented a root-cause-oriented Akwam discovery change: listing candidates are now fetched with bounded concurrency (up to four workers) across the existing endpoint variants, rather than serially timing out one candidate at a time. Acceptance remains strict and `streams=0` is not treated as success.
+- Implemented a root-cause-oriented Akwam discovery change: listing candidates are fetched with bounded concurrency (up to four workers) across the existing endpoint variants, rather than serially timing out one candidate at a time.
+- Implemented a second root-cause fix in Akwam URL resolution: relative links are now resolved against the mounted `/one` site base, while explicit root-relative links still resolve against the origin. This prevents valid content links from being rewritten to the wrong host path and then rejected as identity/parser failures.
 - No provider reclassification, no waiver, no new PR, and no merge.
 
 ## CI / tests / artifacts
-- Exact-head run `35955742917`, merge ref `808e596289a354f9be478316220a7b41a39be271`: install green; lint green; 26/26 tests green; build green; Yacine and WeCima runtime gates passed; Akwam, ArabSeed, FaselHD, Anime4Up, WitAnime, 3isk and EgyDead strict require gates failed.
-- Previous code head under test: `e78c08737ccdff537725854bcac19226239b94ab`.
-- New code commit: `c79b1781bea30523707315f33f6ff8a8fb7cac94` (`src/providers/akwam/index.ts`).
-- No exact-head CI run exists yet for `c79b1781bea30523707315f33f6ff8a8fb7cac94`.
+- Latest completed exact-head run inspected before this change: `35955742917`, merge ref `808e596289a354f9be478316220a7b41a39be271`: install green; lint green; 26/26 tests green; build green; Yacine and WeCima runtime gates passed; Akwam, ArabSeed, FaselHD, Anime4Up, WitAnime, 3isk and EgyDead strict require gates failed.
+- Previous code head under test: `ccdbfc11f05bf1c40f57c40394cda68d6bcdbd54`.
+- New code commit: `3b68eb2d880321bdf743539964cc38c64885ab23` (`src/providers/akwam/index.ts`).
+- No exact-head CI run exists yet for `3b68eb2d880321bdf743539964cc38c64885ab23`.
 - Documentation commit: this update on the PR head.
 - No release-ready artifact claimed; no release published.
 
@@ -73,10 +74,10 @@ UX/polish only after P0/P1.
 **D) Beta Readiness: 47.0%.** No increase because there is still one fully Working provider and no release artifact.
 
 ## Risks / what does not work
-- Akwam still fails before discovery on the exact-head run; the configured `/one` route is reached but no parser-valid identity is established, so no stream credit is granted.
+- Akwam still has no completed proof after the new URL-resolution fix; exact-head runtime must confirm whether `/one`-relative links were the shared failure cause.
 - FaselHD still has no current Working evidence; all configured domains failed identity verification on the latest run.
 - WeCima remains unusable from hosted runtime due verified Cloudflare challenge; ArabSeed category paths are challenged; SyriaLive independence remains unproven.
 - Security closure, Stremio runtime proof, licensing/dependency audit and release artifacts remain open.
 
 ## Next target
-Stay on PR #26. Validate the new Akwam bounded-concurrency code on its exact head. If Akwam still fails, use the new independent timing/outcome evidence to separate endpoint contract drift from external reachability, then repair the common identity/runtime layer only where the evidence supports it. Do not relax identity verification, do not bypass Cloudflare/DRM/paywalls, and do not merge until every strict require gate is green and the PR is mergeable.
+Stay on PR #26. Validate commit `3b68eb2d880321bdf743539964cc38c64885ab23` on its exact head. If Akwam still fails, use the new log to separate route-relative URL drift from external reachability and repair only the common layer supported by evidence. Do not relax identity verification, do not bypass Cloudflare/DRM/paywalls, and do not merge until every strict require gate is green and the PR is mergeable.
