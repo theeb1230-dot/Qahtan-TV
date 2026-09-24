@@ -51,6 +51,13 @@ export class AkwamProvider extends BaseProvider {
     );
   }
 
+  private isContentPath(path: string): boolean {
+    if (/^\/category(?:\/|$)/i.test(path)) return false;
+    if (/^\/(?:movies?|series|films?|tv)\/?$/i.test(path)) return false;
+    return /(?:\/movie(?:s)?\/|\/series\/|\/watch(?:\.php|\/)|\/episode(?:s)?\/)/i.test(path)
+      && !/^\/(?:movies?|series|films?|tv)\/?$/i.test(path);
+  }
+
   private async verifyIdentity(baseUrl: string): Promise<boolean> {
     try {
       const resp = await this.http.get(baseUrl, { timeout: 15000, retries: 1, retryDelayMs: 250 });
@@ -97,10 +104,7 @@ export class AkwamProvider extends BaseProvider {
       const absolute = this.fixUrl(href, baseUrl);
       let path = '';
       try { path = new URL(absolute).pathname.toLowerCase(); } catch { return; }
-      // Category/navigation links are not content items. Accept only canonical
-      // content paths, otherwise /category/movies/ is misreported as a title.
-      if (/^\/category(?:\/|$)/i.test(path) || /^\/(?:movies?|series|films?|tv)\/?$/i.test(path)) return;
-      if (!/(?:\/movie(?:s)?\/|\/series\/|\/watch(?:\.php|\/)|\/episode(?:s)?\/)/i.test(path)) return;
+      if (!this.isContentPath(path)) return;
       if (!absolute || seen.has(absolute) || absolute === this.siteBase(baseUrl) || absolute === `${this.siteBase(baseUrl)}/`) return;
       const entry = resp.$(el).closest('.entry-box, article, .post, .movie, .film, .film-poster, .post-item, li, .card, .item');
       const title = (
@@ -125,7 +129,7 @@ export class AkwamProvider extends BaseProvider {
         if (!href) return;
         const absolute = this.fixUrl(href, baseUrl);
         const path = (() => { try { return new URL(absolute).pathname.toLowerCase(); } catch { return ''; } })();
-        if (!absolute || seen.has(absolute) || /^\/category(?:\/|$)/i.test(path) || !/(?:\/movie(?:s)?\/|\/series\/|\/watch(?:\.php|\/)|\/episode(?:s)?\/)/i.test(path)) return;
+        if (!absolute || seen.has(absolute) || !this.isContentPath(path)) return;
         const title = (resp.$(el).attr('title') || resp.$(el).attr('aria-label') || resp.$(el).text() || `Akwam ${idx + 1}`).replace(/\s+/g, ' ').trim();
         if (title.length < 2) return;
         seen.add(absolute);
