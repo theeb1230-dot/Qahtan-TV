@@ -1,10 +1,12 @@
 export type DomainHealth = 'unknown' | 'healthy' | 'degraded' | 'dead';
-
 export interface DomainObservation { health:DomainHealth; lastCheckedAt:string|null; lastSuccessAt:string|null; latencyMs:number|null; consecutiveFailures:number; cooldownUntil:string|null; identityVerified:boolean; reason:string|null; }
 export interface ProviderDomainConfig { providerId:string; primary:string; fallbacks:string[]; candidates:string[]; lastKnownGood:string|null; health:DomainHealth; lastCheckedAt:string|null; identityHints:string[]; }
 
 const baseConfigs: Record<string, ProviderDomainConfig> = {
-  akwam:{providerId:'akwam',primary:'https://akwam.ss/one',fallbacks:[],candidates:[],lastKnownGood:'https://akwam.ss/one',health:'unknown',lastCheckedAt:null,identityHints:['akwam']},
+  // akwam.ss/one timed out on the latest hosted-runner probe. akwams.org/one is a
+  // quarantined candidate observed from current public Akwam pages; it is not
+  // promoted until identity/parser prerequisites and full runtime E2E pass.
+  akwam:{providerId:'akwam',primary:'https://akwam.ss/one',fallbacks:[],candidates:['https://akwams.org/one'],lastKnownGood:'https://akwam.ss/one',health:'unknown',lastCheckedAt:null,identityHints:['akwam']},
   // The public Yacine website is product identity, while runtime data uses a separate encrypted API contract.
   // Only API origins belong in operational ranking; promotion still requires successful decrypt + JSON contract validation by the provider.
   yacinetv:{providerId:'yacinetv',primary:'https://def.ycnapi.com/api',fallbacks:['https://deft.yacinelive.com/api'],candidates:[],lastKnownGood:null,health:'unknown',lastCheckedAt:null,identityHints:['yacine-api-contract']},
