@@ -31,7 +31,7 @@ export class AkwamProvider extends BaseProvider {
     return new URL(url, base).toString();
   }
 
-  private isChallenge(resp: Awaited<ReturnType<HttpClient['get']>): boolean {
+  private isChallenge(resp: Awaited<ReturnType<HttpClient['get']>>): boolean {
     const title = resp.$('title').first().text().trim().toLowerCase();
     const body = resp.$('body').text().replace(/\s+/g, ' ').trim().toLowerCase();
     return /just a moment|cloudflare|verify you are human|attention required/.test(`${title} ${body}`);
