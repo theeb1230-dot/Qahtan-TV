@@ -49,6 +49,15 @@ export class FaselhdProvider extends BaseProvider {
     return this.brandVerified($) && this.parserContractVerified($);
   }
 
+  private detailIdentityVerified(response: any, origin: string): boolean {
+    const host = new URL(origin).hostname;
+    const canonicalHost = /(^|\.)fasel-hd\.(co|com)$|(^|\.)fasellhd\.(rest|baby)$/.test(host);
+    if (!canonicalHost || response.status < 200 || response.status >= 400) return false;
+    const parser = this.parserContractVerified(response.$);
+    const hasDetailMarkers = response.$('h1,h2,meta[property="og:title"],meta[property="og:image"],article,video,iframe,a[href*="watch.php"],a[href*="/episode/"]').length > 0;
+    return parser && hasDetailMarkers;
+  }
+
   private parseItems($: any, baseUrl: string, forcedType?: StremioContentType): ProviderItem[] {
     const out: ProviderItem[] = [];
     const seen = new Set<string>();
@@ -153,7 +162,7 @@ export class FaselhdProvider extends BaseProvider {
           url,
           episodes: episodes.length ? episodes : undefined,
         },
-        identityVerified: this.identityVerified(response.$),
+        identityVerified: this.detailIdentityVerified(response, origin),
       };
     });
   }
@@ -251,7 +260,7 @@ export class FaselhdProvider extends BaseProvider {
         }
       }
 
-      return { value: streams, identityVerified: this.identityVerified(response.$) };
+      return { value: streams, identityVerified: this.detailIdentityVerified(response, origin) };
     });
   }
 }
