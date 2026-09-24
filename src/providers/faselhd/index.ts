@@ -20,9 +20,11 @@ export class FaselhdProvider extends BaseProvider {
 
   private fixUrl(url?: string, baseUrl = this.mainUrl): string {
     if (!url) return '';
-    if (url.startsWith('//')) return `https:${url}`;
-    if (/^https?:\/\//i.test(url)) return url;
-    return `${baseUrl.replace(/\/$/, '')}/${url.replace(/^\//, '')}`;
+    try {
+      return new URL(url, baseUrl).toString();
+    } catch {
+      return '';
+    }
   }
 
   private effectiveOrigin(url: string | undefined, fallback: string): string {
@@ -54,7 +56,7 @@ export class FaselhdProvider extends BaseProvider {
     const push = (href?: string, title?: string, poster?: string) => {
       if (!href || !title) return;
       const url = this.fixUrl(href, baseUrl);
-      if (seen.has(url)) return;
+      if (!url || seen.has(url)) return;
       seen.add(url);
       const type = forcedType || (/series|episode|مسلسل|حلقة/i.test(`${url} ${title}`) ? 'series' : 'movie');
       out.push({
@@ -173,7 +175,8 @@ export class FaselhdProvider extends BaseProvider {
       const collectMedia = (source: any, name: string, referrer: string) => {
         const addCandidate = (value?: string, quality = 'Auto') => {
           if (!value) return;
-          add(this.fixUrl(value, referrer), name, quality, { Referer: referrer });
+          const resolved = this.fixUrl(value, referrer);
+          if (resolved) add(resolved, name, quality, { Referer: referrer });
         };
         source.$('source[src],video[src],video[data-src],*[data-file],*[data-video],*[data-src]').each((_: number, node: any) => {
           const el = source.$(node);
@@ -183,19 +186,32 @@ export class FaselhdProvider extends BaseProvider {
         for (const match of html.matchAll(mediaPattern)) addCandidate(match[0]);
       };
 
+      const collectIframesAndLinks = (source: any, pageUrl: string) => {
+        const urls: string[] = [];
+        source.$('iframe[src],iframe[data-src],a[href],button[data-href],button[onclick],.serversList a,.buttonsList button').each((_: number, element: any) => {
+          const raw = source.$(element).attr('href') || source.$(element).attr('data-href') || source.$(element).attr('data-src') || source.$(element).attr('src') || source.$(element).attr('onclick')?.match(/https?:\/\/[^'\"]+/)?.[0];
+          const resolved = this.fixUrl(raw, pageUrl);
+          if (resolved && !urls.includes(resolved)) urls.push(resolved);
+        });
+        return urls;
+      };
+
       const scripts = response.$('script').map((_: number, script: any) => response.$(script).text()).get().join('\n');
       for (const match of scripts.matchAll(mediaPattern)) add(match[0], 'FaselHD Script', 'Auto', { Referer: response.url || fullUrl });
       for (const match of response.text.matchAll(mediaPattern)) add(match[0], 'FaselHD HTML', 'Auto', { Referer: response.url || fullUrl });
       collectMedia(response, 'FaselHD Source', response.url || fullUrl);
 
-      const iframe = response.$('iframe').first().attr('data-src') || response.$('iframe').first().attr('src');
-      if (iframe) {
+      const candidatePages = collectIframesAndLinks(response, response.url || fullUrl).slice(0, 10);
+      for (const candidateUrl of candidatePages) {
+        if (/\.(?:m3u8|mp4|mkv)(?:$|\?)/i.test(candidateUrl)) {
+          add(candidateUrl, 'FaselHD Direct', 'Auto', { Referer: response.url || fullUrl });
+          continue;
+        }
         try {
-          const playerUrl = this.fixUrl(iframe, origin);
-          const playerResponse = await this.http.get(playerUrl, { headers: { Referer: response.url || fullUrl, 'User-Agent': MOBILE_USER_AGENT } });
-          collectMedia(playerResponse, 'FaselHD Iframe', playerUrl);
+          const playerResponse = await this.http.get(candidateUrl, { headers: { Referer: response.url || fullUrl, 'User-Agent': MOBILE_USER_AGENT }, timeout: 7000 });
+          collectMedia(playerResponse, 'FaselHD Player', candidateUrl);
           const playerScripts = playerResponse.$('script').map((_: number, script: any) => playerResponse.$(script).text()).get().join('\n');
-          for (const match of playerScripts.matchAll(mediaPattern)) add(match[0], 'FaselHD Iframe', 'Auto', { Referer: playerUrl });
+          for (const match of playerScripts.matchAll(mediaPattern)) add(match[0], 'FaselHD Player', 'Auto', { Referer: candidateUrl });
 
           const context: any = {
             window: {},
@@ -203,9 +219,9 @@ export class FaselhdProvider extends BaseProvider {
             navigator: { userAgent: 'Mozilla/5.0' },
             jwplayer: () => ({
               setup: (config: any) => {
-                if (config?.file) add(config.file, 'FaselHD JW', '1080p', { Referer: playerUrl });
+                if (config?.file) add(this.fixUrl(config.file, candidateUrl), 'FaselHD JW', '1080p', { Referer: candidateUrl });
                 for (const source of config?.sources || []) {
-                  if (source?.file) add(source.file, `FaselHD ${source.label || 'Source'}`, source.label || 'Auto', { Referer: playerUrl });
+                  if (source?.file) add(this.fixUrl(source.file, candidateUrl), `FaselHD ${source.label || 'Source'}`, source.label || 'Auto', { Referer: candidateUrl });
                 }
               },
               on: () => undefined,
@@ -220,23 +236,18 @@ export class FaselhdProvider extends BaseProvider {
               // Ignore player scripts that require browser-only APIs.
             }
           }
+
+          const nested = collectIframesAndLinks(playerResponse, candidateUrl).filter((nestedUrl) => nestedUrl !== candidateUrl).slice(0, 4);
+          for (const nestedUrl of nested) {
+            try {
+              const extracted = await extractStreams(nestedUrl, candidateUrl);
+              for (const stream of extracted) add(stream.url, stream.name, stream.quality, { ...(stream.headers || {}), Referer: candidateUrl });
+            } catch {
+              // Continue through bounded server candidates.
+            }
+          }
         } catch (error) {
-          this.logger.debug(`FaselHD iframe extraction failed: ${(error as Error).message}`);
-        }
-      }
-
-      const links: string[] = [];
-      response.$('a[href],button[data-href],button[onclick],.serversList a,.buttonsList button').each((_: number, element: any) => {
-        const href = response.$(element).attr('href') || response.$(element).attr('data-href') || response.$(element).attr('onclick')?.match(/https?:\/\/[^'\"]+/)?.[0];
-        if (href) links.push(this.fixUrl(href, origin));
-      });
-
-      for (const url of [...new Set(links)].slice(0, 8)) {
-        try {
-          const extracted = await extractStreams(url, response.url || fullUrl);
-          for (const stream of extracted) add(stream.url, stream.name, stream.quality, { ...(stream.headers || {}), Referer: response.url || fullUrl });
-        } catch {
-          // Individual server failure must not hide other bounded candidates.
+          this.logger.debug(`FaselHD player extraction failed: ${(error as Error).message}`);
         }
       }
 
